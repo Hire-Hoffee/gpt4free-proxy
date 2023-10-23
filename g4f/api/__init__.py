@@ -1,4 +1,6 @@
-import g4f; g4f.logging = True
+import typing
+from .. import BaseProvider
+import g4f; g4f.debug.logging = True
 import time
 import json
 import random
@@ -26,10 +28,12 @@ class Api:
     __default_ip   = '127.0.0.1'
     __default_port = 1337
     
-    def __init__(self, engine: g4f, debug: bool = True, sentry: bool = False) -> None:
+    def __init__(self, engine: g4f, debug: bool = True, sentry: bool = False,
+                 list_ignored_providers:typing.List[typing.Union[str, BaseProvider]]=None) -> None:
         self.engine    = engine
         self.debug     = debug
         self.sentry    = sentry
+        self.list_ignored_providers     = list_ignored_providers
         self.log_level = logging.DEBUG if debug else logging.WARN
         
         hook_logging(level=self.log_level, format='[%(asctime)s] %(levelname)s in %(module)s: %(message)s')
@@ -41,7 +45,7 @@ class Api:
         
     def run(self, bind_str, threads=8):
         host, port = self.__parse_bind(bind_str)
-        
+
         CORS(self.app, resources={r'/v1/*': {'supports_credentials': True, 'expose_headers': [
             'Content-Type',
             'Authorization',
@@ -51,18 +55,18 @@ class Api:
             'Access-Control-Request-Method',
             'Access-Control-Request-Headers',
             'Content-Disposition'], 'max_age': 600}})
-        
+
         self.app.route('/v1/models',           methods=['GET'])(self.models)
         self.app.route('/v1/models/<model_id>', methods=['GET'])(self.model_info)
-        
+
         self.app.route('/v1/chat/completions', methods=['POST'])(self.chat_completions)
         self.app.route('/v1/completions',      methods=['POST'])(self.completions)
 
         for ex in default_exceptions:
             self.app.register_error_handler(ex, self.__handle_error)
-        
+
         if not self.debug:
-            self.logger.warning('Serving on http://{}:{}'.format(host, port))
+            self.logger.warning(f'Serving on http://{host}:{port}')
 
         WSGIRequestHandler.protocol_version = 'HTTP/1.1'
         serve(self.app, host=host, port=port, ident=None, threads=threads)
@@ -76,7 +80,7 @@ class Api:
     
     @staticmethod
     def __after_request(resp):
-        resp.headers['X-Server'] = 'g4f/%s' % g4f.version
+        resp.headers['X-Server'] = f'g4f/{g4f.version}'
 
         return resp
     
@@ -102,7 +106,8 @@ class Api:
         logger.info(f'model: {model}, stream: {stream}, request: {messages[-1]["content"]}')
 
         response = self.engine.ChatCompletion.create(model=model, 
-                                                     stream=stream, messages=messages)
+                                                     stream=stream, messages=messages,
+                                                     ignored=self.list_ignored_providers)
 
         completion_id        = ''.join(random.choices(string.ascii_letters + string.digits, k=28))
         completion_timestamp = int(time.time())

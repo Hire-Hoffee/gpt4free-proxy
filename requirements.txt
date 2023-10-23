@@ -17,3 +17,6 @@ werkzeug
 loguru
 tiktoken
 flask [async]
+pillow
+platformdirs
+numpy
