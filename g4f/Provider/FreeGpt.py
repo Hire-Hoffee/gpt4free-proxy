@@ -7,11 +7,12 @@ from ..requests import StreamSession
 from .base_provider import AsyncGeneratorProvider
 
 domains = [
-    'https://r.aifree.site'
+    'https://s.aifree.site'
 ]
 
 class FreeGpt(AsyncGeneratorProvider):
     url                   = "https://freegpts1.aifree.site/"
+    supports_message_history = True
     supports_gpt_35_turbo = True
     working               = True
 

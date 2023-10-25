@@ -1,48 +1,18 @@
 ![248433934-7886223b-c1d1-4260-82aa-da5741f303bb](https://github.com/xtekky/gpt4free/assets/98614666/ea012c87-76e0-496a-8ac4-e2de090cc6c9)
 
-By using this repository or any code related to it, you agree to the [legal notice](./LEGAL_NOTICE.md). The author is not responsible for any copies, forks, reuploads made by other users, or anything else related to gpt4free. This is the author's only account and repository. To prevent impersonation or irresponsible actions, please comply with the GNU GPL license this Repository uses.
 
-- latest pypi version: [`0.1.7.6`](https://pypi.org/project/g4f/0.1.7.6)
+> **Note**
+> By using this repository or any code related to it, you agree to the [legal notice](./LEGAL_NOTICE.md). The author is not responsible for any copies, forks, re-uploads made by other users, or anything else related to GPT4Free. This is the author's only account and repository. To prevent impersonation or irresponsible actions, please comply with the GNU GPL license this Repository uses.
+
+> **Note**
+> Latest pypi version: [`0.1.7.7`](https://pypi.org/project/g4f/0.1.7.7)
 ```sh
 pip install -U g4f
 ```
 
-or if you just want to use the gui or interference api, install with [pipx](https://pypa.github.io/pipx/)
-
-```sh
-pipx install g4f
-```
-
 ## New features
-- Telegram Channel: https://t.me/g4f_channel
-- g4f GUI is back !!:   
-Install g4f with pip and then run:
-
-```sh
-g4f gui
-```
-
-or 
-
-```sh
-python -m g4f.gui.run
-```
-
-preview:
-
-<img width="1470" alt="image" src="https://github.com/xtekky/gpt4free/assets/98614666/a767290f-d29c-471c-9db4-6905d1cb6489">
-
-- run interference api from pypi package:
-
-```sh
-g4f api
-```
-
-or
-
-```py
-python -m g4f.interference.run
-```
+* Telegram Channel: [t.me/g4f_channel](https://t.me/g4f_channel)
+* g4f documentation (unfinished): [g4f.mintlify.app](https://g4f.mintlify.app) | Contribute to the docs via: [github.com/xtekky/gpt4free-docs](https://github.com/xtekky/gpt4free-docs)
 
 ## Table of Contents
 
@@ -165,7 +135,8 @@ To stop the Docker containers, simply run:
 docker compose down
 ```
 
-**Note:** When using Docker, any changes you make to your local files will be reflected in the Docker container thanks to the volume mapping in the `docker-compose.yml` file. If you add or remove dependencies, however, you'll need to rebuild the Docker image using `docker compose build`.
+> **Note**
+> When using Docker, any changes you make to your local files will be reflected in the Docker container thanks to the volume mapping in the `docker-compose.yml` file. If you add or remove dependencies, however, you'll need to rebuild the Docker image using `docker compose build`.
 
 ## Usage
 
@@ -333,16 +304,16 @@ response = g4f.ChatCompletion.create(
 print(f"Result:", response)
 ```
 
-### interference openai-proxy api (use with openai python package)
+### interference openai-proxy API (use with openai python package)
 
-#### run interference api from pypi package:
+#### run interference API from pypi package:
 ```py
 from g4f.api import run_api
 
 run_api()
 ```
 
-#### run interference api from repo:
+#### run interference API from repo:
 If you want to use the embedding function, you need to get a Hugging Face token. You can get one at https://huggingface.co/settings/tokens make sure your role is set to write. If you have your token, just use it instead of the OpenAI api-key.
 
 run server:
@@ -360,7 +331,7 @@ python -m g4f.api
 ```py
 import openai
 
-openai.api_key = "Empty if you don't use embeddings, otherwise your hugginface token"
+openai.api_key = "Empty if you don't use embeddings, otherwise your Hugging Face token"
 openai.api_base = "http://localhost:1337/v1"
 
 
@@ -572,15 +543,15 @@ Call in your terminal the "create_provider" script:
 python etc/tool/create_provider.py
 ```
 1. Enter your name for the new provider.
-2. Copy & Paste a cURL command from your browser developer tools.
+2. Copy and paste a cURL command from your browser developer tools.
 3. Let the AI ​​create the provider for you.
 4. Customize the provider according to your needs.
 
 #### Create Provider
 
-0. Check out the current [list of potential providers](https://github.com/zukixa/cool-ai-stuff#ai-chat-websites), or find your own provider source!
-1. Create a new file in [g4f/provider](./g4f/provider) with the name of the Provider
-2. Implement a class that extends [BaseProvider](./g4f/provider/base_provider.py).
+1. Check out the current [list of potential providers](https://github.com/zukixa/cool-ai-stuff#ai-chat-websites), or find your own provider source!
+2. Create a new file in [g4f/Provider](./g4f/Provider) with the name of the Provider
+3. Implement a class that extends [BaseProvider](./g4f/Provider/base_provider.py).
 
 ```py
 from __future__ import annotations
@@ -604,9 +575,9 @@ class HogeService(AsyncGeneratorProvider):
         yield ""
 ```
 
-3. Here, you can adjust the settings, for example if the website does support streaming, set `supports_stream` to `True`...
-4. Write code to request the provider in `create_async_generator` and `yield` the response, _even if_ its a one-time response, do not hesitate to look at other providers for inspiration
-5. Add the Provider Name in [g4f/provider/**init**.py](./g4f/provider/__init__.py)
+4. Here, you can adjust the settings, for example, if the website does support streaming, set `supports_stream` to `True`...
+5. Write code to request the provider in `create_async_generator` and `yield` the response, _even if_ it's a one-time response, do not hesitate to look at other providers for inspiration
+6. Add the Provider Name in [g4f/Provider/**init**.py](./g4f/Provider/__init__.py)
 
 ```py
 from .HogeService import HogeService
@@ -616,7 +587,7 @@ __all__ = [
 ]
 ```
 
-6. You are done !, test the provider by calling it:
+7. You are done !, test the provider by calling it:
 
 ```py
 import g4f
