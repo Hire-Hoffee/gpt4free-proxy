@@ -1,3 +1,5 @@
+<div id="top"></div>
+
 ![248433934-7886223b-c1d1-4260-82aa-da5741f303bb](https://github.com/xtekky/gpt4free/assets/98614666/ea012c87-76e0-496a-8ac4-e2de090cc6c9)
 
 
@@ -5,13 +7,13 @@
 > By using this repository or any code related to it, you agree to the [legal notice](./LEGAL_NOTICE.md). The author is not responsible for any copies, forks, re-uploads made by other users, or anything else related to GPT4Free. This is the author's only account and repository. To prevent impersonation or irresponsible actions, please comply with the GNU GPL license this Repository uses.
 
 > **Note**
-> Latest pypi version: [`0.1.7.7`](https://pypi.org/project/g4f/0.1.7.7)
+> Latest pypi version: [`0.1.7.9`](https://pypi.org/project/g4f/0.1.7.9)
 ```sh
 pip install -U g4f
 ```
 
 ## New features
-* Telegram Channel: [t.me/g4f_channel](https://t.me/g4f_channel)
+* Telegram Channel: [t.me/g4f_channel](https://telegram.me/g4f_channel)
 * g4f documentation (unfinished): [g4f.mintlify.app](https://g4f.mintlify.app) | Contribute to the docs via: [github.com/xtekky/gpt4free-docs](https://github.com/xtekky/gpt4free-docs)
 
 ## Table of Contents
@@ -19,7 +21,7 @@ pip install -U g4f
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [Setting up the project](#setting-up-the-project)
-    - [Install using pypi](#install-using-pypi)
+    - [Install using PyPi](#install-using-pypi)
     - [Install using docker](#setting-up-with-docker)
 - [Usage](#usage)
   - [The `g4f` Package](#the-g4f-package)
@@ -127,7 +129,7 @@ docker compose build
 docker compose up
 ```
 
-You server will now be running at `http://localhost:1337`. You can interact with the API or run your tests as you would normally.
+Your server will now be running at `http://localhost:1337`. You can interact with the API or run your tests as you would normally.
 
 To stop the Docker containers, simply run:
 
@@ -306,7 +308,7 @@ print(f"Result:", response)
 
 ### interference openai-proxy API (use with openai python package)
 
-#### run interference API from pypi package:
+#### run interference API from PyPi package:
 ```py
 from g4f.api import run_api
 
@@ -331,9 +333,12 @@ python -m g4f.api
 ```py
 import openai
 
-openai.api_key = "Empty if you don't use embeddings, otherwise your Hugging Face token"
-openai.api_base = "http://localhost:1337/v1"
+# Set your Hugging Face token as the API key if you use embeddings
+# If you don't use embeddings, leave it empty
+openai.api_key = "YOUR_HUGGING_FACE_TOKEN"  # Replace with your actual token
 
+# Set the API base URL if needed, e.g., for a local development environment
+openai.api_base = "http://localhost:1337/v1"
 
 def main():
     chat_completion = openai.ChatCompletion.create(
@@ -343,18 +348,18 @@ def main():
     )
 
     if isinstance(chat_completion, dict):
-        # not stream
+        # Not streaming
         print(chat_completion.choices[0].message.content)
     else:
-        # stream
+        # Streaming
         for token in chat_completion:
             content = token["choices"][0]["delta"].get("content")
-            if content != None:
+            if content is not None:
                 print(content, end="", flush=True)
 
-
-if __name__ == "__main__":
+if __name__ == "__main":
     main()
+
 ```
 
 ## Models
@@ -543,7 +548,7 @@ Call in your terminal the "create_provider" script:
 python etc/tool/create_provider.py
 ```
 1. Enter your name for the new provider.
-2. Copy and paste a cURL command from your browser developer tools.
+2. Copy and paste the `URL` command from your browser developer tools.
 3. Let the AI ​​create the provider for you.
 4. Customize the provider according to your needs.
 
@@ -602,7 +607,7 @@ for message in response:
 ## Contributors
 
 A list of the contributors is available [here](https://github.com/xtekky/gpt4free/graphs/contributors)   
-The [`Vercel.py`](https://github.com/xtekky/gpt4free/blob/main/g4f/Provider/Vercel.py) file contains code from [vercel-llm-api](https://github.com/ading2210/vercel-llm-api) by [@ading2210](https://github.com/ading2210), which is licenced under the [GNU GPL v3](https://www.gnu.org/licenses/gpl-3.0.txt)   
+The [`Vercel.py`](https://github.com/xtekky/gpt4free/blob/main/g4f/Provider/Vercel.py) file contains code from [vercel-llm-api](https://github.com/ading2210/vercel-llm-api) by [@ading2210](https://github.com/ading2210), which is licensed under the [GNU GPL v3](https://www.gnu.org/licenses/gpl-3.0.txt)   
 Top 1 Contributor: [@hlohaus](https://github.com/hlohaus)
 
 ## Copyright
@@ -645,3 +650,5 @@ This project is licensed under <a href="./LICENSE">GNU_GPL_v3.0</a>. <img width=
     </td>
   </tr>
 </table>
+
+<p align="right">(<a href="#top">🔼 Back to top</a>)</p>

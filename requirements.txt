@@ -6,7 +6,7 @@ certifi
 browser_cookie3
 websockets
 js2py
-flask
+flask[async]
 flask-cors
 typing-extensions
 PyExecJS
@@ -20,3 +20,4 @@ flask [async]
 pillow
 platformdirs
 numpy
+asgiref

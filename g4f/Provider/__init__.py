@@ -17,6 +17,7 @@ from .ChatgptFree     import ChatgptFree
 from .ChatgptLogin    import ChatgptLogin
 from .ChatgptX        import ChatgptX
 from .Cromicle        import Cromicle
+from .DeepInfra       import DeepInfra
 from .FakeGpt         import FakeGpt
 from .FreeGpt         import FreeGpt
 from .GPTalk          import GPTalk
@@ -35,7 +36,7 @@ from .Vercel          import Vercel
 from .Ylokh           import Ylokh
 from .You             import You
 from .Yqcloud         import Yqcloud
-from .Geekgpt         import GeekGpt
+from .GeekGpt         import GeekGpt
 
 from .base_provider  import BaseProvider, AsyncProvider, AsyncGeneratorProvider
 from .retry_provider import RetryProvider
@@ -70,6 +71,7 @@ class ProviderUtils:
         'ChatgptX': ChatgptX,
         'CodeLinkAva': CodeLinkAva,
         'Cromicle': Cromicle,
+        'DeepInfra': DeepInfra,
         'DfeHub': DfeHub,
         'EasyChat': EasyChat,
         'Equing': Equing,
@@ -109,7 +111,7 @@ class ProviderUtils:
         'Ylokh': Ylokh,
         'You': You,
         'Yqcloud': Yqcloud,
-        'Geekgpt': GeekGpt,
+        'GeekGpt': GeekGpt,
         
         'BaseProvider': BaseProvider,
         'AsyncProvider': AsyncProvider,
@@ -144,6 +146,7 @@ __all__ = [
     'ChatgptLogin',
     'ChatgptX',
     'Cromicle',
+    'DeepInfra',
     'CodeLinkAva',
     'DfeHub',
     'EasyChat',

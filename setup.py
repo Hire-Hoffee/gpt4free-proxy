@@ -11,7 +11,7 @@ with codecs.open(os.path.join(here, "README.md"), encoding="utf-8") as fh:
 with open("requirements.txt") as f:
     required = f.read().splitlines()
 
-VERSION = "0.1.7.7"
+VERSION = "0.1.7.9"
 DESCRIPTION = (
     "The official gpt4free repository | various collection of powerful language models"
 )
@@ -27,7 +27,7 @@ setup(
     long_description=long_description,
     packages=find_packages(),
     package_data={
-        "g4f": ["g4f/interference/*", "g4f/gui/client/*", "g4f/gui/server/*"]
+        "g4f": ["g4f/interference/*", "g4f/gui/client/*", "g4f/gui/server/*", "g4f/Provider/npm/*"]
     },
     include_package_data=True,
     install_requires=required,

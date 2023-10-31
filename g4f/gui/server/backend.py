@@ -44,14 +44,15 @@ class Backend_Api:
     
     def _conversation(self):
         try:
-            jailbreak       = request.json['jailbreak']
-            internet_access = request.json['meta']['content']['internet_access']
-            conversation    = request.json['meta']['content']['conversation']
-            prompt          = request.json['meta']['content']['parts'][0]
+            #jailbreak       = request.json['jailbreak']
+            #internet_access = request.json['meta']['content']['internet_access']
+            #conversation    = request.json['meta']['content']['conversation']
+            prompt          = request.json['meta']['content']['parts']
             model           = request.json['model']
             provider        = request.json.get('provider').split('g4f.Provider.')[1]
 
-            messages = special_instructions[jailbreak] + conversation + search(internet_access, prompt) + [prompt]
+            messages = prompt
+            print(messages)
 
             def stream():
                 yield from g4f.ChatCompletion.create(
