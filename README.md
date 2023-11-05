@@ -7,12 +7,13 @@
 > By using this repository or any code related to it, you agree to the [legal notice](./LEGAL_NOTICE.md). The author is not responsible for any copies, forks, re-uploads made by other users, or anything else related to GPT4Free. This is the author's only account and repository. To prevent impersonation or irresponsible actions, please comply with the GNU GPL license this Repository uses.
 
 > **Note**
-> Latest pypi version: [`0.1.7.9`](https://pypi.org/project/g4f/0.1.7.9)
+> Latest pypi version: [`0.1.8.0`](https://pypi.org/project/g4f/0.1.8.0)
 ```sh
 pip install -U g4f
 ```
 
 ## New features
+* Discord Channel: [discord.gg/XfybzPXPH5](https://discord.gg/XfybzPXPH5)
 * Telegram Channel: [t.me/g4f_channel](https://telegram.me/g4f_channel)
 * g4f documentation (unfinished): [g4f.mintlify.app](https://g4f.mintlify.app) | Contribute to the docs via: [github.com/xtekky/gpt4free-docs](https://github.com/xtekky/gpt4free-docs)
 
@@ -380,6 +381,7 @@ if __name__ == "__main":
 
 | Website| Provider| gpt-3.5 | Stream    | Async     | Status | Auth |
 | ------ | ------- | ------- | --------- | --------- | ------ | ---- |
+| [chat9.yqcloud.top](https://chat9.yqcloud.top/) | `g4f.Provider.Yqcloud` | ✔️ | ✔️ | ✔️ | ![Active](https://img.shields.io/badge/Active-brightgreen) | ❌ |
 | [www.aitianhu.com](https://www.aitianhu.com) | `g4f.Provider.AItianhu` | ✔️ | ✔️ | ✔️ | ![Active](https://img.shields.io/badge/Active-brightgreen) | ❌ |
 | [chat3.aiyunos.top](https://chat3.aiyunos.top/) | `g4f.Provider.AItianhuSpace` | ✔️ | ✔️ | ✔️ | ![Active](https://img.shields.io/badge/Active-brightgreen) | ❌ |
 | [e.aiask.me](https://e.aiask.me) | `g4f.Provider.AiAsk` | ✔️ | ✔️ | ✔️ | ![Active](https://img.shields.io/badge/Active-brightgreen) | ❌ |
@@ -427,7 +429,6 @@ if __name__ == "__main":
 | [wewordle.org](https://wewordle.org) | `g4f.Provider.Wewordle` | ✔️ | ❌ | ✔️ | ![Inactive](https://img.shields.io/badge/Inactive-red) | ❌ |
 | [chat.wuguokai.xyz](https://chat.wuguokai.xyz) | `g4f.Provider.Wuguokai` | ✔️ | ❌ | ❌ | ![Inactive](https://img.shields.io/badge/Inactive-red) | ❌ |
 | [chat.ylokh.xyz](https://chat.ylokh.xyz) | `g4f.Provider.Ylokh` | ✔️ | ✔️ | ✔️ | ![Inactive](https://img.shields.io/badge/Inactive-red) | ❌ |
-| [chat9.yqcloud.top](https://chat9.yqcloud.top/) | `g4f.Provider.Yqcloud` | ✔️ | ✔️ | ✔️ | ![Inactive](https://img.shields.io/badge/Inactive-red) | ❌ |
 
 ### Other Models
 
