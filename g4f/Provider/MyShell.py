@@ -81,7 +81,7 @@ text.split('\\n').forEach((line, index) => {
 return content;
 """
             while True:
-                chunk = driver.execute_script(script):
+                chunk = driver.execute_script(script)
                 if chunk:
                     yield chunk
                 elif chunk != "":
