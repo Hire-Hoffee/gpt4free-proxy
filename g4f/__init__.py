@@ -5,7 +5,7 @@ from .Provider  import BaseProvider, RetryProvider
 from .typing    import Messages, CreateResult, Union, List
 from .          import debug
 
-version       = '0.1.8.2'
+version       = '0.1.8.4'
 version_check = True
 
 def check_pypi_version() -> None:
@@ -15,6 +15,8 @@ def check_pypi_version() -> None:
 
         if version != latest_version:
             print(f'New pypi version: {latest_version} (current: {version}) | pip install -U g4f')
+            return False
+        return True
 
     except Exception as e:
         print(f'Failed to check g4f pypi version: {e}')
