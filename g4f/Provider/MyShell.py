@@ -21,16 +21,9 @@ class MyShell(BaseProvider):
         proxy: str = None,
         timeout: int = 120,
         browser: WebDriver = None,
-        hidden_display: bool = True,
         **kwargs
     ) -> CreateResult:
-        if browser:
-            driver = browser
-        else:
-            if hidden_display:
-                driver, display = get_browser("", True, proxy)
-            else:
-                driver = get_browser("", False, proxy)
+        driver = browser if browser else get_browser("", False, proxy)
 
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support.ui import WebDriverWait
@@ -38,11 +31,11 @@ class MyShell(BaseProvider):
 
         driver.get(cls.url)
         try:
-            # Wait for page load
+            # Wait for page load and cloudflare validation
             WebDriverWait(driver, timeout).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "body:not(.no-js)"))
             )
-            # Send message
+            # Send request with message
             script = """
 response = await fetch("https://api.myshell.ai/v1/bot/chat/send_message", {
     "headers": {
@@ -66,7 +59,7 @@ window.reader = response.body.getReader();
             script = """
 chunk = await window.reader.read();
 if (chunk['done']) return null;
-text = (new TextDecoder ()).decode(chunk['value']);
+text = (new TextDecoder()).decode(chunk['value']);
 content = '';
 text.split('\\n').forEach((line, index) => {
     if (line.startsWith('data: ')) {
@@ -86,10 +79,10 @@ return content;
                     yield chunk
                 elif chunk != "":
                     break
+                else:
+                    time.sleep(0.1)
         finally:
-            driver.close()
             if not browser:
+                driver.close()
                 time.sleep(0.1)
                 driver.quit()
-            if hidden_display:
-                display.stop()
