@@ -6,7 +6,7 @@ from .deprecated     import *
 from .needs_auth     import *
 from .unfinished     import *
 from .selenium       import *
-
+from .Aura            import Aura
 from .AiAsk           import AiAsk
 from .Aichat          import Aichat
 from .AiChatOnline    import AiChatOnline
@@ -39,7 +39,6 @@ from .Koala           import Koala
 from .Liaobots        import Liaobots
 from .Llama2          import Llama2
 from .MyShell         import MyShell
-from .NoowAi          import NoowAi
 from .OnlineGpt       import OnlineGpt
 from .Opchatgpts      import Opchatgpts
 from .PerplexityAi    import PerplexityAi
@@ -47,7 +46,6 @@ from .Phind           import Phind
 from .Pi              import Pi
 from .TalkAi          import TalkAi
 from .Vercel          import Vercel
-from .VoiGpt          import VoiGpt
 from .Ylokh           import Ylokh
 from .You             import You
 from .Yqcloud         import Yqcloud

@@ -23,7 +23,7 @@ docker pull hlohaus789/g4f
 
 ## 📚 Table of Contents
 
-- [🆕 What's New](#-what-s-new)
+- [🆕 What's New](#-whats-new)
 - [📚 Table of Contents](#-table-of-contents)
 - [🛠️ Getting Started](#-getting-started)
     + [Docker container](#docker-container)
@@ -68,7 +68,7 @@ docker pull hlohaus789/g4f
 
 ```sh
 docker pull hlohaus789/g4f
-docker run -p 8080:80 -p 1337:1337 -p 7900:7900 --shm-size="2g" hlohaus789/g4f:latest
+docker run -p 8080:8080 -p 1337:1337 -p 7900:7900 --shm-size="2g" hlohaus789/g4f:latest
 ```
 3. Open the included client on: [http://localhost:8080/chat/](http://localhost:8080/chat/)
 or set the api base in your client to: [http://localhost:1337/v1](http://localhost:1337/v1)
@@ -155,6 +155,7 @@ cd gpt4free
 4. Build the Docker image:
 
 ```bash
+docker pull selenium/node-chrome
 docker-compose build
 ```
 
@@ -254,7 +255,7 @@ for message in response:
 
 ##### Using Browser
 
-Some providers using a a browser to bypass the bot protection. They using the selenium webdriver to control the browser. The browser settings and the login data are saved in a custom directory. If the headless mode is enabled, the browser windows are loaded invisibly. For performance reasons, it is recommended to reuse the browser instances and close them yourself at the end:
+Some providers using a browser to bypass the bot protection. They using the selenium webdriver to control the browser. The browser settings and the login data are saved in a custom directory. If the headless mode is enabled, the browser windows are loaded invisibly. For performance reasons, it is recommended to reuse the browser instances and close them yourself at the end:
 
 ```python
 import g4f
@@ -334,6 +335,12 @@ response = g4f.ChatCompletion.create(
 )
 
 print(f"Result:", response)
+```
+
+You can also set a proxy globally via an environment variable:
+
+```sh
+export G4F_PROXY="http://host:port"
 ```
 
 ### Interference openai-proxy API (Use with openai python package)
