@@ -5,7 +5,7 @@ app = Flask(__name__)
 
 
 @app.route("/data", methods=["POST"])
-async def hello_world():
+async def get_data():
     try:
         data = request.json
 
