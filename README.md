@@ -18,6 +18,17 @@ pip install -U g4f
 ```sh
 docker pull hlohaus789/g4f
 ```
+# To do
+As per the survey, here is a list of improvements to come
+- [ ] Improve Documentation (on g4f.mintlify.app) & Do video tutorials
+- [ ] Improve the provider status list & updates
+- [ ] Tutorials on how to reverse sites to write your own wrapper (PoC only ofc)
+- [ ] Improve the Bing wrapper. (might write a new wrapper in golang as it is very fast)
+- [ ] Write a standard provider performance test to improve the stability
+- [ ] update the repository to include the new openai library syntax (ex: `Openai()` class)
+- [ ] Potential support and development of local models
+- [ ] improve compatibility and error handling
+
 
 ## 🆕 What's New
 - <a href="./README-DE.md"><img src="https://img.shields.io/badge/öffnen in-🇩🇪 deutsch-bleu.svg" alt="Öffnen en DE"></a>
@@ -89,7 +100,7 @@ or set the api base in your client to: [http://localhost:1337/v1](http://localho
 ##### Install using pypi:
 
 ```
-pip install -U g4f
+pip install -U "g4f[all]"
 ```
 
 ##### or:
@@ -123,13 +134,19 @@ python3 -m venv venv
    ```
    source venv/bin/activate
    ```
-5. Install the required Python packages from `requirements.txt`:
+5. Install minimum requirements:
+
+```
+pip install -r requirements-min.txt
+```
+
+6. Or install all used Python packages from `requirements.txt`:
 
 ```
 pip install -r requirements.txt
 ```
 
-6. Create a `test.py` file in the root folder and start using the repo, further Instructions are below
+7. Create a `test.py` file in the root folder and start using the repo, further Instructions are below
 
 ```py
 import g4f
@@ -416,6 +433,26 @@ if __name__ == "__main__":
     main()
 ```
 
+##  API usage (POST)
+#### Chat completions
+Send the POST request to /v1/chat/completions with body containing the `model` method. This example uses python with requests library:
+```python
+import requests
+url = "http://localhost:1337/v1/chat/completions"
+body = {
+    "model": "gpt-3.5-turbo-16k",
+    "stream": False,
+    "messages": [
+        {"role": "assistant", "content": "What can you do?"}
+    ]
+}
+json_response = requests.post(url, json=body).json().get('choices', [])
+
+for choice in json_response:
+    print(choice.get('message', {}).get('content', ''))
+```
+
+
 ## 🚀 Providers and Models
 
 ### GPT-4
@@ -426,7 +463,6 @@ if __name__ == "__main__":
 | [chat.geekgpt.org](https://chat.geekgpt.org) | `g4f.Provider.GeekGpt` | ✔️ | ✔️ | ✔️ | ![Unknown](https://img.shields.io/badge/Unknown-grey) | ❌ |
 | [gptchatly.com](https://gptchatly.com) | `g4f.Provider.GptChatly` | ✔️ | ✔️ | ❌ | ![Unknown](https://img.shields.io/badge/Unknown-grey) | ❌ |
 | [liaobots.site](https://liaobots.site) | `g4f.Provider.Liaobots` | ✔️ | ✔️ | ✔️ | ![Unknown](https://img.shields.io/badge/Unknown-grey) | ❌ |
-| [www.phind.com](https://www.phind.com) | `g4f.Provider.Phind` | ❌ | ✔️ | ✔️ | ![Unknown](https://img.shields.io/badge/Unknown-grey) | ❌ |
 | [raycast.com](https://raycast.com) | `g4f.Provider.Raycast` | ✔️ | ✔️ | ✔️ | ![Unknown](https://img.shields.io/badge/Unknown-grey) | ✔️ |
 
 ### GPT-3.5

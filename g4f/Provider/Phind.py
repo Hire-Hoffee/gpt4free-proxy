@@ -9,7 +9,6 @@ from ..requests import StreamSession
 class Phind(AsyncGeneratorProvider):
     url = "https://www.phind.com"
     working = True
-    supports_gpt_4 = True
     supports_stream = True
     supports_message_history = True
 
@@ -39,10 +38,10 @@ class Phind(AsyncGeneratorProvider):
             prompt = messages[-1]["content"]
             data = {
                 "question": prompt,
-                "questionHistory": [
+                "question_history": [
                     message["content"] for message in messages[:-1] if message["role"] == "user"
                 ],
-                "answerHistory": [
+                "answer_history": [
                     message["content"] for message in messages if message["role"] == "assistant"
                 ],
                 "webResults": [],
@@ -55,7 +54,7 @@ class Phind(AsyncGeneratorProvider):
                     "creativeMode": creative_mode,
                     "customLinks": []
                 },
-                "context": "",
+                "context": "\n".join([message["content"] for message in messages if message["role"] == "system"]),
                 "rewrittenQuestion": prompt,
                 "challenge": 0.21132115912208504
             }
@@ -69,6 +68,8 @@ class Phind(AsyncGeneratorProvider):
                         if chunk.startswith(b'<PHIND_WEBRESULTS>') or chunk.startswith(b'<PHIND_FOLLOWUP>'):
                             pass
                         elif chunk.startswith(b"<PHIND_METADATA>") or chunk.startswith(b"<PHIND_INDICATOR>"):
+                            pass
+                        elif chunk.startswith(b"<PHIND_SPAN_BEGIN>") or chunk.startswith(b"<PHIND_SPAN_END>"):
                             pass
                         elif chunk:
                             yield chunk.decode()

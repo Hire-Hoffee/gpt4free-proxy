@@ -164,12 +164,16 @@ const ask_gpt = async () => {
             for (const line of value.split("\n")) {
                 if (!line) continue;
                 const message = JSON.parse(line);
-                if (message["type"] == "content") {
-                    text += message["content"];
+                if (message.type == "content") {
+                    text += message.content;
                 } else if (message["type"] == "provider") {
-                    provider = message["provider"];
-                    content.querySelector('.provider').innerHTML =
-                        '<a href="' + provider.url + '" target="_blank">' + provider.name + "</a>"
+                    provider = message.provider
+                    content.querySelector('.provider').innerHTML = `
+                        <a href="${provider.url}" target="_blank">
+                            ${provider.name}
+                        </a>
+                        ${provider.model ? ' with ' + provider.model : ''}
+                    `
                 } else if (message["type"] == "error") {
                     error = message["error"];
                 } else if (message["type"] == "message") {
@@ -660,7 +664,13 @@ observer.observe(message_input, { attributes: true });
     }
     document.getElementById("version_text").innerHTML = text
 })()
-
+imageInput.addEventListener('click', async (event) => {
+    imageInput.value = '';
+});
+fileInput.addEventListener('click', async (event) => {
+    fileInput.value = '';
+    delete fileInput.dataset.text;
+});
 fileInput.addEventListener('change', async (event) => {
     if (fileInput.files.length) {
         type = fileInput.files[0].type;

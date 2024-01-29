@@ -30,14 +30,13 @@ def get_pr_details(github: Github) -> PullRequest:
     Returns:
         PullRequest: An object representing the pull request.
     """
-    './pr_number'
     with open('./pr_number', 'r') as file:
-        pr_number = int(file.read())
+        pr_number = file.read().strip()
     if not pr_number:
         return
 
     repo = github.get_repo(GITHUB_REPOSITORY)
-    pull = repo.get_pull(pr_number)
+    pull = repo.get_pull(int(pr_number))
 
     return pull
 
@@ -127,26 +126,28 @@ def analyze_code(pull: PullRequest, diff: str)-> list[dict]:
     for line in diff.split('\n'):
         if line.startswith('+++ b/'):
             current_file_path = line[6:]
+            changed_lines = []
         elif line.startswith('@@'):
             match = re.search(r'\+([0-9]+?),', line)
             if match:
                 offset_line = int(match.group(1))
         elif current_file_path:
-            if line.startswith('\\') or line.startswith('diff') and changed_lines:
-                prompt = create_prompt(changed_lines, pull, current_file_path)
+            if (line.startswith('\\') or line.startswith('diff')) and changed_lines:
+                prompt = create_analyze_prompt(changed_lines, pull, current_file_path)
                 response = get_ai_response(prompt)
                 for review in response.get('reviews', []):
                     review['path'] = current_file_path
                     comments.append(review)
-                changed_lines = []
                 current_file_path = None
-            elif not line.startswith('-'):
+            elif line.startswith('-'):
+                changed_lines.append(line)
+            else:
                 changed_lines.append(f"{offset_line}:{line}")
                 offset_line += 1
         
     return comments
 
-def create_prompt(changed_lines: list[str], pull: PullRequest, file_path: str):
+def create_analyze_prompt(changed_lines: list[str], pull: PullRequest, file_path: str):
     """
     Creates a prompt for the g4f model.
 
@@ -194,10 +195,9 @@ def create_review_prompt(pull: PullRequest, diff: str):
         str: The generated prompt for review.
     """
     return f"""Your task is to review a pull request. Instructions:
-- Write in name of you "g4f-copilot".
+- Write in name of g4f copilot. Don't use placeholder.
 - Write the review in GitHub Markdown format.
 - Thank the author for contributing to the project.
-- Point out that you might leave a few comments on the files.
 
 Pull request author: {pull.user.name}
 Pull request title: {pull.title}
@@ -219,6 +219,9 @@ def main():
         if not pull:
             print(f"No PR number found")
             exit()
+        if pull.get_reviews().totalCount > 0 or pull.get_issue_comments().totalCount > 0:
+            print(f"Has already a review")
+            exit()
         diff = get_diff(pull.diff_url)
     except Exception as e:
         print(f"Error get details: {e.__class__.__name__}: {e}")
@@ -235,10 +238,10 @@ def main():
         exit(1)
     print("Comments:", comments)
     try:
-        if not comments:
+        if comments:
             pull.create_review(body=review, comments=comments)
         else:
-            pull.create_comment(body=review)
+            pull.create_issue_comment(body=review)
     except Exception as e:
         print(f"Error posting review: {e}")
         exit(1)
