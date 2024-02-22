@@ -6,18 +6,22 @@ app = Flask(__name__)
 
 @app.route("/data", methods=["POST"])
 async def get_data():
-    try:
-        data = request.json
+    data = request.json
 
-        response = await g4f.ChatCompletion.create_async(
-            model="gpt-3.5-turbo",
-            messages=data.get("messages"),
-        )
+    for model in g4f.models._all_models:
+        try:
+            response = await g4f.ChatCompletion.create_async(
+                model=model,
+                messages=data.get("messages"),
+            )
 
-        return response
-    except Exception as e:
-        print(e)
-        return "Some error occurred :("
+            if response and response != "流量异常":
+                return response
+
+        except Exception as e:
+            print(e)
+
+    return "Some error occurred :("
 
 
 app.run(port=8989, host="0.0.0.0")
