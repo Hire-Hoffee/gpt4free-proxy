@@ -1,4 +1,4 @@
-### G4F - Leagcy API
+### G4F - Legacy API
 
 #### ChatCompletion
 
@@ -177,6 +177,24 @@ async def run_all():
     await asyncio.gather(*calls)
 
 asyncio.run(run_all())
+```
+
+##### Proxy and Timeout Support
+
+All providers support specifying a proxy and increasing timeout in the create functions.
+
+```python
+import g4f
+
+response = g4f.ChatCompletion.create(
+    model=g4f.models.default,
+    messages=[{"role": "user", "content": "Hello"}],
+    proxy="http://host:port",
+    # or socks5://user:pass@host:port
+    timeout=120,  # in secs
+)
+
+print(f"Result:", response)
 ```
 
 [Return to Home](/)

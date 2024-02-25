@@ -11,7 +11,7 @@ const imageInput        = document.querySelector('#image');
 const cameraInput       = document.querySelector('#camera');
 const fileInput         = document.querySelector('#file');
 
-let   prompt_lock       = false;
+let prompt_lock = false;
 
 hljs.addPlugin(new CopyButtonPlugin());
 
@@ -46,6 +46,22 @@ const highlight = (container) => {
     );
 }
 
+const register_remove_message = async () => {
+    document.querySelectorAll(".message .fa-xmark").forEach(async (el) => {
+        if (!("click" in el.dataset)) {
+            el.dataset.click = "true";
+            el.addEventListener("click", async () => {
+                if (prompt_lock) {
+                    return;
+                }
+                const message_el = el.parentElement.parentElement;
+                await remove_message(window.conversation_id, message_el.dataset.index);
+                await load_conversation(window.conversation_id);
+            })
+        }
+    });
+}
+
 const delete_conversations = async () => {
     localStorage.clear();
     await new_conversation();
@@ -58,13 +74,14 @@ const handle_ask = async () => {
     message = message_input.value
     if (message.length > 0) {
         message_input.value = '';
+        prompt_lock = true;
         await add_conversation(window.conversation_id, message);
         if ("text" in fileInput.dataset) {
             message += '\n```' + fileInput.dataset.type + '\n'; 
             message += fileInput.dataset.text;
             message += '\n```'
         }
-        await add_message(window.conversation_id, "user", message);
+        let message_index = await add_message(window.conversation_id, "user", message);
         window.token = message_id();
 
         if (imageInput.dataset.src) URL.revokeObjectURL(imageInput.dataset.src);
@@ -73,9 +90,10 @@ const handle_ask = async () => {
         else delete imageInput.dataset.src
 
         message_box.innerHTML += `
-            <div class="message">
+            <div class="message" data-index="${message_index}">
                 <div class="user">
                     ${user_image}
+                    <i class="fa-solid fa-xmark"></i>
                     <i class="fa-regular fa-phone-arrow-up-right"></i>
                 </div>
                 <div class="content" id="user_${token}"> 
@@ -87,6 +105,7 @@ const handle_ask = async () => {
                 </div>
             </div>
         `;
+        await register_remove_message();
         highlight(message_box);
         await ask_gpt();
     }
@@ -101,23 +120,34 @@ const remove_cancel_button = async () => {
     }, 300);
 };
 
-const ask_gpt = async () => {
-    regenerate.classList.add(`regenerate-hidden`);
-    messages = await get_messages(window.conversation_id);
-
-    // Remove generated images from history
+const filter_messages = (messages) => {
+    let new_messages = [];
     for (i in messages) {
-        messages[i]["content"] = messages[i]["content"].replaceAll(
+        new_message = messages[i];
+        // Remove generated images from history
+        new_message["content"] = new_message["content"].replaceAll(
             /<!-- generated images start -->[\s\S]+<!-- generated images end -->/gm,
             ""
         )
-        delete messages[i]["provider"];
+        delete new_message["provider"];
+        // Remove regenerated messages
+        if (!new_message.regenerate) {
+            new_messages.push(new_message)
+        }
     }
+    return new_messages;
+}
+
+const ask_gpt = async () => {
+    regenerate.classList.add(`regenerate-hidden`);
+    messages = await get_messages(window.conversation_id);
+    total_messages = messages.length;
 
     // Remove history, if it is selected
     if (document.getElementById('history')?.checked) {
-        messages = [messages[messages.length-1]]
+        messages = [messages[messages.length-1]];
     }
+    messages = filter_messages(messages);
 
     window.scrollTo(0, 0);
     window.controller = new AbortController();
@@ -125,7 +155,6 @@ const ask_gpt = async () => {
     jailbreak    = document.getElementById("jailbreak");
     provider     = document.getElementById("provider");
     model        = document.getElementById("model");
-    prompt_lock  = true;
     window.text  = '';
 
     stop_generating.classList.remove(`stop_generating-hidden`);
@@ -135,10 +164,15 @@ const ask_gpt = async () => {
     await new Promise((r) => setTimeout(r, 500));
     window.scrollTo(0, 0);
 
+    el = message_box.querySelector('.count_total');
+    el ? el.parentElement.removeChild(el) : null;
+
     message_box.innerHTML += `
-        <div class="message">
+        <div class="message" data-index="${total_messages}">
             <div class="assistant">
-                ${gpt_image} <i class="fa-regular fa-phone-arrow-down-left"></i>
+                ${gpt_image}
+                <i class="fa-solid fa-xmark"></i>
+                <i class="fa-regular fa-phone-arrow-down-left"></i>
             </div>
             <div class="content" id="gpt_${window.token}">
                 <div class="provider"></div>
@@ -185,7 +219,6 @@ const ask_gpt = async () => {
         window.scrollTo(0, 0);
 
         const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-
         error = provider = null;
         while (true) {
             const { value, done } = await reader.read();
@@ -215,7 +248,7 @@ const ask_gpt = async () => {
             } else {
                 html = markdown_render(text);
                 let lastElement, lastIndex = null;
-                for (element of ['</p>', '</code></pre>', '</li>\n</ol>']) {
+                for (element of ['</p>', '</code></pre>', '</li>\n</ol>', '</li>\n</ul>']) {
                     const index = html.lastIndexOf(element)
                     if (index > lastIndex) {
                         lastElement = element;
@@ -252,9 +285,13 @@ const ask_gpt = async () => {
     }
     let cursorDiv = document.getElementById(`cursor`);
     if (cursorDiv) cursorDiv.parentNode.removeChild(cursorDiv);
-    add_message(window.conversation_id, "assistant", text, provider);
+    if (text) {
+        await add_message(window.conversation_id, "assistant", text, provider);
+    }
+    await load_conversation(window.conversation_id);
     message_box.scrollTop = message_box.scrollHeight;
     await remove_cancel_button();
+    await register_remove_message();
     prompt_lock = false;
     window.scrollTo(0, 0);
     await load_conversations(20, 0);
@@ -342,17 +379,25 @@ const load_conversation = async (conversation_id) => {
     let messages = await get_messages(conversation_id);
 
     let elements = "";
-    for (item of messages) {
-        let provider = item.provider ? `
+    for (i in messages) {
+        let item = messages[i];
+        let next_i = parseInt(i) + 1;
+        let next_provider = item.provider ? item.provider : (messages.length > next_i ? messages[next_i].provider : null);
+        let tokens_count = next_provider?.model ? count_tokens(next_provider.model, item.content) : "";
+        let append_count = tokens_count ? `, ${tokens_count} tokens` : "";
+        let words_count = `(${count_words(item.content)} words${append_count})`
+        let provider_link = item?.provider?.name ? `<a href="${item?.provider?.url}" target="_blank">${item.provider.name}</a>` : "";
+        let provider = provider_link ? `
             <div class="provider">
-            <a href="${item.provider.url}" target="_blank">${item.provider.name}</a>
-            ${item.provider.model ? ' with ' + item.provider.model : ''}
+                ${provider_link}
+                ${item.provider.model ? ' with ' + item.provider.model : ''}
             </div>
         ` : "";
         elements += `
-            <div class="message">
+            <div class="message" data-index="${i}">
                 <div class=${item.role == "assistant" ? "assistant" : "user"}>
                     ${item.role == "assistant" ? gpt_image : user_image}
+                    <i class="fa-solid fa-xmark"></i>
                     ${item.role == "assistant"
                         ? `<i class="fa-regular fa-phone-arrow-down-left"></i>`
                         : `<i class="fa-regular fa-phone-arrow-up-right"></i>`
@@ -361,12 +406,20 @@ const load_conversation = async (conversation_id) => {
                 <div class="content">
                     ${provider}
                     <div class="content_inner">${markdown_render(item.content)}</div>
+                    <div class="count">${words_count}</div>
                 </div>
             </div>
         `;
     }
+
+    let count_total = GPTTokenizer_cl100k_base?.encodeChat(filter_messages(messages), "gpt-3.5-turbo").length
+    if (count_total > 0) {
+        elements += `<div class="count_total">(${count_total} tokens used)</div>`;
+    }
+
     message_box.innerHTML = elements;
 
+    await register_remove_message();
     highlight(message_box);
 
     message_box.scrollTo({ top: message_box.scrollHeight, behavior: "smooth" });
@@ -375,6 +428,23 @@ const load_conversation = async (conversation_id) => {
         message_box.scrollTop = message_box.scrollHeight;
     }, 500);
 };
+
+function count_words(text) {
+    var matches = text.match(/[\w\d\’\'-]+/gi);
+    return matches ? matches.length : 0;
+}
+
+function count_tokens(model, text) {
+    if (model.startsWith("gpt-3") || model.startsWith("gpt-4")) {
+        return GPTTokenizer_cl100k_base?.encode(text).length
+    }
+    if (model.startsWith("llama2") || model.startsWith("codellama")) {
+        return llamaTokenizer?.encode(text).length
+    }
+    if (model.startsWith("mistral") || model.startsWith("mixtral")) {
+        return mistralTokenizer?.encode(text).length
+    }
+}
 
 const get_conversation = async (conversation_id) => {
     let conversation = await JSON.parse(
@@ -409,11 +479,30 @@ const add_conversation = async (conversation_id, content) => {
     history.pushState({}, null, `/chat/${conversation_id}`);
 };
 
-const remove_last_message = async (conversation_id) => {
+const hide_last_message = async (conversation_id) => {
     const conversation = await get_conversation(conversation_id)
+    const last_message = conversation.items.pop();
+    last_message["regenerate"] = true;
+    conversation.items.push(last_message);
 
-    conversation.items.pop();
+    localStorage.setItem(
+        `conversation:${conversation_id}`,
+        JSON.stringify(conversation)
+    );
+};
 
+const remove_message = async (conversation_id, index) => {
+    const conversation = await get_conversation(conversation_id);
+    let new_items = [];
+    for (i in conversation.items) {
+        if (i == index - 1) {
+            delete conversation.items[i]["regenerate"];
+        }
+        if (i != index) {
+            new_items.push(conversation.items[i])
+        }
+    }
+    conversation.items = new_items;
     localStorage.setItem(
         `conversation:${conversation_id}`,
         JSON.stringify(conversation)
@@ -433,6 +522,8 @@ const add_message = async (conversation_id, role, content, provider) => {
         `conversation:${conversation_id}`,
         JSON.stringify(conversation)
     );
+
+    return conversation.items.length - 1;
 };
 
 const load_conversations = async (limit, offset, loader) => {
@@ -468,7 +559,8 @@ document.getElementById(`cancelButton`).addEventListener(`click`, async () => {
 });
 
 document.getElementById(`regenerateButton`).addEventListener(`click`, async () => {
-    await remove_last_message(window.conversation_id);
+    prompt_lock = true;
+    await hide_last_message(window.conversation_id);
     window.token = message_id();
     await ask_gpt();
 });
@@ -590,7 +682,6 @@ colorThemes.forEach((themeOption) => {
         document.documentElement.className = themeOption.id;
     });
 });
-
 
 window.onload = async () => {
     setTheme();
