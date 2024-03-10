@@ -16,6 +16,7 @@ async def get_data():
             )
 
             if response and response != "流量异常":
+                print("\nResponse model:", model)
                 return response
 
         except Exception as e:
