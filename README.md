@@ -1,4 +1,7 @@
 ![248433934-7886223b-c1d1-4260-82aa-da5741f303bb](https://github.com/xtekky/gpt4free/assets/98614666/ea012c87-76e0-496a-8ac4-e2de090cc6c9)
+
+<a href="https://trendshift.io/repositories/1692" target="_blank"><img src="https://trendshift.io/api/badge/repositories/1692" alt="xtekky%2Fgpt4free | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+
 Written by [@xtekky](https://github.com/hlohaus) & maintained by [@hlohaus](https://github.com/hlohaus)
 
 <div id="top"></div>
@@ -38,7 +41,7 @@ As per the survey, here is a list of improvements to come
 - [ ] 🚧 Improve Documentation (in /docs & Guides, Howtos, & Do video tutorials)
 - [x] Improve the provider status list & updates
 - [ ] Tutorials on how to reverse sites to write your own wrapper (PoC only ofc)
-- [ ] Improve the Bing wrapper. (might write a new wrapper in golang as it is very fast)
+- [x] Improve the Bing wrapper. (Wait and Retry or reuse conversation)
 - [ ] Write a standard provider performance test to improve the stability
 - [ ] Potential support and development of local models
 - [ ] 🚧 Improve compatibility and error handling
@@ -66,7 +69,7 @@ As per the survey, here is a list of improvements to come
   * [GPT-3.5](#gpt-35)
   * [Other](#other)
   * [Models](#models)
-- [🔗 Related GPT4Free Projects](#-related-gpt4free-projects)
+- [🔗 Powered by gpt4free](#-powered-by-gpt4free)
 - [🤝 Contribute](#-contribute)
     + [How do i create a new Provider?](#guide-how-do-i-create-a-new-provider)
     + [How can AI help me with writing code?](#guide-how-can-ai-help-me-with-writing-code)
@@ -167,7 +170,34 @@ image_url = response.data[0].url
 - New Client API like the OpenAI Python library: [/docs/client](/docs/client.md)
 - Legacy API with python modules: [/docs/legacy](/docs/legacy.md)
 
-#### Web UI
+### Webview GUI
+
+Open the GUI in a window of your OS. Runs on a local/static/ssl server and use a JavaScript API.
+Supports login into the OpenAI Chat, Image Upload and streamed Text Generation.
+
+Supports all platforms, but only Linux tested.
+
+1. Install all requirements with:
+
+```bash
+pip install g4f[webview]
+```
+
+2. Follow the OS specific steps here:
+ [pywebview installation](https://pywebview.flowrl.com/guide/installation.html#dependencies)
+
+3. Run the app with:
+
+```python
+from g4f.gui.webview import run_webview
+run_webview(debug=True)
+```
+or execute the following command:
+```bash
+python -m g4f.gui.webview -debug
+```
+
+#### Webserver
 
 To start the web interface, type the following codes in python:
 
@@ -234,7 +264,7 @@ set G4F_PROXY=http://host:port
 | [bing.com](https://bing.com/chat) | `g4f.Provider.Bing` | ❌ | ✔️ | ✔️ | ![Unknown](https://img.shields.io/badge/Unknown-grey) | ❌ |
 | [chatgpt.ai](https://chatgpt.ai) | `g4f.Provider.ChatgptAi` | ❌ | ✔️ | ✔️ | ![Active](https://img.shields.io/badge/Active-brightgreen) | ❌ |
 | [liaobots.site](https://liaobots.site) | `g4f.Provider.Liaobots` | ✔️ | ✔️ | ✔️ | ![Active](https://img.shields.io/badge/Active-brightgreen) | ❌ |
-| [chat.openai.com](https://chat.openai.com) | `g4f.Provider.OpenaiChat` | ✔️ | ✔️ | ✔️ | ![Unknown](https://img.shields.io/badge/Unknown-grey) | ✔️ |
+| [chat.openai.com](https://chat.openai.com) | `g4f.Provider.OpenaiChat` | ✔️ | ❌ | ✔️ | ![Unknown](https://img.shields.io/badge/Unknown-grey) | ✔️ |
 | [raycast.com](https://raycast.com) | `g4f.Provider.Raycast` | ✔️ | ✔️ | ✔️ | ![Unknown](https://img.shields.io/badge/Unknown-grey) | ✔️ |
 | [beta.theb.ai](https://beta.theb.ai) | `g4f.Provider.Theb` | ✔️ | ✔️ | ✔️ | ![Unknown](https://img.shields.io/badge/Unknown-grey) | ❌ |
 | [you.com](https://you.com) | `g4f.Provider.You` | ✔️ | ✔️ | ✔️ | ![Unknown](https://img.shields.io/badge/Unknown-grey) | ❌ |
@@ -317,109 +347,406 @@ set G4F_PROXY=http://host:port
 | claude-3-sonnet | Anthropic | g4f.Provider.You | [anthropic.com](https://www.anthropic.com/) |
 | pi | Inflection | g4f.Provider.Pi | [inflection.ai](https://inflection.ai/) |
 
-## 🔗 Related GPT4Free Projects
+## 🔗 Powered by gpt4free
 
 <table>
   <thead align="center">
     <tr border: none;>
-      <td><b>🎁 Projects</b></td>
-      <td><b>⭐ Stars</b></td>
-      <td><b>📚 Forks</b></td>
-      <td><b>🛎 Issues</b></td>
-      <td><b>📬 Pull requests</b></td>
+      <td>
+        <b>🎁 Projects</b>
+      </td>
+      <td>
+        <b>⭐ Stars</b>
+      </td>
+      <td>
+        <b>📚 Forks</b>
+      </td>
+      <td>
+        <b>🛎 Issues</b>
+      </td>
+      <td>
+        <b>📬 Pull requests</b>
+      </td>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><a href="https://github.com/xtekky/gpt4free"><b>gpt4free</b></a></td>
-      <td><a href="https://github.com/xtekky/gpt4free/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/xtekky/gpt4free?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/xtekky/gpt4free/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/xtekky/gpt4free?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/xtekky/gpt4free/issues"><img alt="Issues" src="https://img.shields.io/github/issues/xtekky/gpt4free?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/xtekky/gpt4free/pulls"><img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/xtekky/gpt4free?style=flat-square&labelColor=343b41"/></a></td>
+      <td>
+        <a href="https://github.com/xtekky/gpt4free">
+          <b>gpt4free</b>
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/xtekky/gpt4free/stargazers">
+          <img alt="Stars" src="https://img.shields.io/github/stars/xtekky/gpt4free?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/xtekky/gpt4free/network/members">
+          <img alt="Forks" src="https://img.shields.io/github/forks/xtekky/gpt4free?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/xtekky/gpt4free/issues">
+          <img alt="Issues" src="https://img.shields.io/github/issues/xtekky/gpt4free?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/xtekky/gpt4free/pulls">
+          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/xtekky/gpt4free?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
     </tr>
-      <td><a href="https://github.com/xiangsx/gpt4free-ts"><b>gpt4free-ts</b></a></td>
-      <td><a href="https://github.com/xiangsx/gpt4free-ts/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/xiangsx/gpt4free-ts?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/xiangsx/gpt4free-ts/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/xiangsx/gpt4free-ts?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/xiangsx/gpt4free-ts/issues"><img alt="Issues" src="https://img.shields.io/github/issues/xiangsx/gpt4free-ts?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/xiangsx/gpt4free-ts/pulls"><img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/xiangsx/gpt4free-ts?style=flat-square&labelColor=343b41"/></a></td>
+    <td>
+      <a href="https://github.com/xiangsx/gpt4free-ts">
+        <b>gpt4free-ts</b>
+      </a>
+    </td>
+    <td>
+      <a href="https://github.com/xiangsx/gpt4free-ts/stargazers">
+        <img alt="Stars" src="https://img.shields.io/github/stars/xiangsx/gpt4free-ts?style=flat-square&labelColor=343b41" />
+      </a>
+    </td>
+    <td>
+      <a href="https://github.com/xiangsx/gpt4free-ts/network/members">
+        <img alt="Forks" src="https://img.shields.io/github/forks/xiangsx/gpt4free-ts?style=flat-square&labelColor=343b41" />
+      </a>
+    </td>
+    <td>
+      <a href="https://github.com/xiangsx/gpt4free-ts/issues">
+        <img alt="Issues" src="https://img.shields.io/github/issues/xiangsx/gpt4free-ts?style=flat-square&labelColor=343b41" />
+      </a>
+    </td>
+    <td>
+      <a href="https://github.com/xiangsx/gpt4free-ts/pulls">
+        <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/xiangsx/gpt4free-ts?style=flat-square&labelColor=343b41" />
+      </a>
+    </td>
     </tr>
-     <tr>
-      <td><a href="https://github.com/zukixa/cool-ai-stuff/"><b>Free AI API's & Potential Providers List</b></a></td>
-      <td><a href="https://github.com/zukixa/cool-ai-stuff/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/zukixa/cool-ai-stuff?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/zukixa/cool-ai-stuff/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/zukixa/cool-ai-stuff?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/zukixa/cool-ai-stuff/issues"><img alt="Issues" src="https://img.shields.io/github/issues/zukixa/cool-ai-stuff?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/zukixa/cool-ai-stuff/pulls"><img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/zukixa/cool-ai-stuff?style=flat-square&labelColor=343b41"/></a></td>
+    <tr>
+      <td>
+        <a href="https://github.com/zukixa/cool-ai-stuff/">
+          <b>Free AI API's & Potential Providers List</b>
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/zukixa/cool-ai-stuff/stargazers">
+          <img alt="Stars" src="https://img.shields.io/github/stars/zukixa/cool-ai-stuff?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/zukixa/cool-ai-stuff/network/members">
+          <img alt="Forks" src="https://img.shields.io/github/forks/zukixa/cool-ai-stuff?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/zukixa/cool-ai-stuff/issues">
+          <img alt="Issues" src="https://img.shields.io/github/issues/zukixa/cool-ai-stuff?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/zukixa/cool-ai-stuff/pulls">
+          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/zukixa/cool-ai-stuff?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
     </tr>
     <tr>
     <tr>
-      <td><a href="https://github.com/xtekky/chatgpt-clone"><b>ChatGPT-Clone</b></a></td>
-      <td><a href="https://github.com/xtekky/chatgpt-clone/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/xtekky/chatgpt-clone?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/xtekky/chatgpt-clone/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/xtekky/chatgpt-clone?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/xtekky/chatgpt-clone/issues"><img alt="Issues" src="https://img.shields.io/github/issues/xtekky/chatgpt-clone?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/xtekky/chatgpt-clone/pulls"><img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/xtekky/chatgpt-clone?style=flat-square&labelColor=343b41"/></a></td>
+      <td>
+        <a href="https://github.com/xtekky/chatgpt-clone">
+          <b>ChatGPT-Clone</b>
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/xtekky/chatgpt-clone/stargazers">
+          <img alt="Stars" src="https://img.shields.io/github/stars/xtekky/chatgpt-clone?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/xtekky/chatgpt-clone/network/members">
+          <img alt="Forks" src="https://img.shields.io/github/forks/xtekky/chatgpt-clone?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/xtekky/chatgpt-clone/issues">
+          <img alt="Issues" src="https://img.shields.io/github/issues/xtekky/chatgpt-clone?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/xtekky/chatgpt-clone/pulls">
+          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/xtekky/chatgpt-clone?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
     </tr>
     <tr>
-      <td><a href="https://github.com/mishalhossin/Discord-Chatbot-Gpt4Free"><b>ChatGpt Discord Bot</b></a></td>
-      <td><a href="https://github.com/mishalhossin/Discord-Chatbot-Gpt4Free/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/mishalhossin/Discord-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/mishalhossin/Discord-Chatbot-Gpt4Free/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/mishalhossin/Discord-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/mishalhossin/Discord-Chatbot-Gpt4Free/issues"><img alt="Issues" src="https://img.shields.io/github/issues/mishalhossin/Discord-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/mishalhossin/Coding-Chatbot-Gpt4Free/pulls"><img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/mishalhossin/Discord-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41"/></a></td>
-<tr>
-        <tr>
-      <td><a href="https://github.com/Zero6992/chatGPT-discord-bot"><b>chatGPT-discord-bot</b></a></td>
-      <td><a href="https://github.com/Zero6992/chatGPT-discord-bot/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/Zero6992/chatGPT-discord-bot?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/Zero6992/chatGPT-discord-bot/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/Zero6992/chatGPT-discord-bot?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/Zero6992/chatGPT-discord-bot/issues"><img alt="Issues" src="https://img.shields.io/github/issues/Zero6992/chatGPT-discord-bot?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/Zero6992/chatGPT-discord-bot/pulls"><img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/Zero6992/chatGPT-discord-bot?style=flat-square&labelColor=343b41"/></a></td>
-<tr>
-  <td><a href="https://github.com/SamirXR/Nyx-Bot"><b>Nyx-Bot (Discord)</b></a></td>
-  <td><a href="https://github.com/SamirXR/Nyx-Bot/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/SamirXR/Nyx-Bot?style=flat-square&labelColor=343b41"/></a></td>
-  <td><a href="https://github.com/SamirXR/Nyx-Bot/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/SamirXR/Nyx-Bot?style=flat-square&labelColor=343b41"/></a></td>
-  <td><a href="https://github.com/SamirXR/Nyx-Bot/issues"><img alt="Issues" src="https://img.shields.io/github/issues/SamirXR/Nyx-Bot?style=flat-square&labelColor=343b41"/></a></td>
-  <td><a href="https://github.com/SamirXR/Nyx-Bot/pulls"><img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/SamirXR/Nyx-Bot?style=flat-square&labelColor=343b41"/></a></td>
-</tr>
+      <td>
+        <a href="https://github.com/mishalhossin/Discord-Chatbot-Gpt4Free">
+          <b>Ai agent</b>
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Josh-XT/AGiXT/stargazers">
+          <img alt="Stars" src="https://img.shields.io/github/stars/mishalhossin/Discord-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Josh-XT/AGiXT/network/members">
+          <img alt="Forks" src="https://img.shields.io/github/forks/mishalhossin/Discord-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Josh-XT/AGiXT/issues">
+          <img alt="Issues" src="https://img.shields.io/github/issues/mishalhossin/Discord-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Josh-XT/AGiXT/pulls">
+          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/mishalhossin/Discord-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
     </tr>
     <tr>
-      <td><a href="https://github.com/MIDORIBIN/langchain-gpt4free"><b>LangChain gpt4free</b></a></td>
-      <td><a href="https://github.com/MIDORIBIN/langchain-gpt4free/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/MIDORIBIN/langchain-gpt4free?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/MIDORIBIN/langchain-gpt4free/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/MIDORIBIN/langchain-gpt4free?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/MIDORIBIN/langchain-gpt4free/issues"><img alt="Issues" src="https://img.shields.io/github/issues/MIDORIBIN/langchain-gpt4free?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/MIDORIBIN/langchain-gpt4free/pulls"><img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/MIDORIBIN/langchain-gpt4free?style=flat-square&labelColor=343b41"/></a></td>
+      <td>
+        <a href="https://github.com/mishalhossin/Discord-Chatbot-Gpt4Free">
+          <b>ChatGpt Discord Bot</b>
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/mishalhossin/Discord-Chatbot-Gpt4Free/stargazers">
+          <img alt="Stars" src="https://img.shields.io/github/stars/mishalhossin/Discord-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/mishalhossin/Discord-Chatbot-Gpt4Free/network/members">
+          <img alt="Forks" src="https://img.shields.io/github/forks/mishalhossin/Discord-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/mishalhossin/Discord-Chatbot-Gpt4Free/issues">
+          <img alt="Issues" src="https://img.shields.io/github/issues/mishalhossin/Discord-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/mishalhossin/Coding-Chatbot-Gpt4Free/pulls">
+          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/mishalhossin/Discord-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+    <tr>
+    <tr>
+      <td>
+        <a href="https://github.com/Zero6992/chatGPT-discord-bot">
+          <b>chatGPT-discord-bot</b>
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Zero6992/chatGPT-discord-bot/stargazers">
+          <img alt="Stars" src="https://img.shields.io/github/stars/Zero6992/chatGPT-discord-bot?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Zero6992/chatGPT-discord-bot/network/members">
+          <img alt="Forks" src="https://img.shields.io/github/forks/Zero6992/chatGPT-discord-bot?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Zero6992/chatGPT-discord-bot/issues">
+          <img alt="Issues" src="https://img.shields.io/github/issues/Zero6992/chatGPT-discord-bot?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Zero6992/chatGPT-discord-bot/pulls">
+          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/Zero6992/chatGPT-discord-bot?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+    <tr>
+      <td>
+        <a href="https://github.com/SamirXR/Nyx-Bot">
+          <b>Nyx-Bot (Discord)</b>
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/SamirXR/Nyx-Bot/stargazers">
+          <img alt="Stars" src="https://img.shields.io/github/stars/SamirXR/Nyx-Bot?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/SamirXR/Nyx-Bot/network/members">
+          <img alt="Forks" src="https://img.shields.io/github/forks/SamirXR/Nyx-Bot?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/SamirXR/Nyx-Bot/issues">
+          <img alt="Issues" src="https://img.shields.io/github/issues/SamirXR/Nyx-Bot?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/SamirXR/Nyx-Bot/pulls">
+          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/SamirXR/Nyx-Bot?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+    </tr>
     </tr>
     <tr>
-      <td><a href="https://github.com/HexyeDEV/Telegram-Chatbot-Gpt4Free"><b>ChatGpt Telegram Bot</b></a></td>
-      <td><a href="https://github.com/HexyeDEV/Telegram-Chatbot-Gpt4Free/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/HexyeDEV/Telegram-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/HexyeDEV/Telegram-Chatbot-Gpt4Free/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/HexyeDEV/Telegram-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/HexyeDEV/Telegram-Chatbot-Gpt4Free/issues"><img alt="Issues" src="https://img.shields.io/github/issues/HexyeDEV/Telegram-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/HexyeDEV/Telegram-Chatbot-Gpt4Free/pulls"><img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/HexyeDEV/Telegram-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41"/></a></td>
-    </tr>
-        <tr>
-      <td><a href="https://github.com/Lin-jun-xiang/chatgpt-line-bot"><b>ChatGpt Line Bot</b></a></td>
-      <td><a href="https://github.com/Lin-jun-xiang/chatgpt-line-bot/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/Lin-jun-xiang/chatgpt-line-bot?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/Lin-jun-xiang/chatgpt-line-bot/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/Lin-jun-xiang/chatgpt-line-bot?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/Lin-jun-xiang/chatgpt-line-bot/issues"><img alt="Issues" src="https://img.shields.io/github/issues/Lin-jun-xiang/chatgpt-line-bot?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/Lin-jun-xiang/chatgpt-line-bot/pulls"><img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/Lin-jun-xiang/chatgpt-line-bot?style=flat-square&labelColor=343b41"/></a></td>
+      <td>
+        <a href="https://github.com/MIDORIBIN/langchain-gpt4free">
+          <b>LangChain gpt4free</b>
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/MIDORIBIN/langchain-gpt4free/stargazers">
+          <img alt="Stars" src="https://img.shields.io/github/stars/MIDORIBIN/langchain-gpt4free?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/MIDORIBIN/langchain-gpt4free/network/members">
+          <img alt="Forks" src="https://img.shields.io/github/forks/MIDORIBIN/langchain-gpt4free?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/MIDORIBIN/langchain-gpt4free/issues">
+          <img alt="Issues" src="https://img.shields.io/github/issues/MIDORIBIN/langchain-gpt4free?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/MIDORIBIN/langchain-gpt4free/pulls">
+          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/MIDORIBIN/langchain-gpt4free?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
     </tr>
     <tr>
-      <td><a href="https://github.com/Lin-jun-xiang/action-translate-readme"><b>Action Translate Readme</b></a></td>
-      <td><a href="https://github.com/Lin-jun-xiang/action-translate-readme/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/Lin-jun-xiang/action-translate-readme?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/Lin-jun-xiang/action-translate-readme/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/Lin-jun-xiang/action-translate-readme?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/Lin-jun-xiang/action-translate-readme/issues"><img alt="Issues" src="https://img.shields.io/github/issues/Lin-jun-xiang/action-translate-readme?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/Lin-jun-xiang/action-translate-readme/pulls"><img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/Lin-jun-xiang/action-translate-readme?style=flat-square&labelColor=343b41"/></a></td>
+      <td>
+        <a href="https://github.com/HexyeDEV/Telegram-Chatbot-Gpt4Free">
+          <b>ChatGpt Telegram Bot</b>
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/HexyeDEV/Telegram-Chatbot-Gpt4Free/stargazers">
+          <img alt="Stars" src="https://img.shields.io/github/stars/HexyeDEV/Telegram-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/HexyeDEV/Telegram-Chatbot-Gpt4Free/network/members">
+          <img alt="Forks" src="https://img.shields.io/github/forks/HexyeDEV/Telegram-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/HexyeDEV/Telegram-Chatbot-Gpt4Free/issues">
+          <img alt="Issues" src="https://img.shields.io/github/issues/HexyeDEV/Telegram-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/HexyeDEV/Telegram-Chatbot-Gpt4Free/pulls">
+          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/HexyeDEV/Telegram-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
     </tr>
     <tr>
-      <td><a href="https://github.com/Lin-jun-xiang/docGPT-streamlit"><b>Langchain Document GPT</b></a></td>
-      <td><a href="https://github.com/Lin-jun-xiang/docGPT-streamlit/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/Lin-jun-xiang/docGPT-streamlit?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/Lin-jun-xiang/docGPT-streamlit/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/Lin-jun-xiang/docGPT-streamlit?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/Lin-jun-xiang/docGPT-streamlit/issues"><img alt="Issues" src="https://img.shields.io/github/issues/Lin-jun-xiang/docGPT-streamlit?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/Lin-jun-xiang/docGPT-streamlit/pulls"><img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/Lin-jun-xiang/docGPT-streamlit?style=flat-square&labelColor=343b41"/></a></td>
+      <td>
+        <a href="https://github.com/Lin-jun-xiang/chatgpt-line-bot">
+          <b>ChatGpt Line Bot</b>
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Lin-jun-xiang/chatgpt-line-bot/stargazers">
+          <img alt="Stars" src="https://img.shields.io/github/stars/Lin-jun-xiang/chatgpt-line-bot?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Lin-jun-xiang/chatgpt-line-bot/network/members">
+          <img alt="Forks" src="https://img.shields.io/github/forks/Lin-jun-xiang/chatgpt-line-bot?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Lin-jun-xiang/chatgpt-line-bot/issues">
+          <img alt="Issues" src="https://img.shields.io/github/issues/Lin-jun-xiang/chatgpt-line-bot?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Lin-jun-xiang/chatgpt-line-bot/pulls">
+          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/Lin-jun-xiang/chatgpt-line-bot?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
     </tr>
     <tr>
-      <td><a href="https://github.com/Simatwa/python-tgpt"><b>python-tgpt</b></a></td>
-      <td><a href="https://github.com/Simatwa/python-tgpt/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/Simatwa/python-tgpt?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/Simatwa/python-tgpt/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/Simatwa/python-tgpt?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/Simatwa/python-tgpt/issues"><img alt="Issues" src="https://img.shields.io/github/issues/Simatwa/python-tgpt?style=flat-square&labelColor=343b41"/></a></td>
-      <td><a href="https://github.com/Simatwa/python-tgpt/pulls"><img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/Simatwa/python-tgpt?style=flat-square&labelColor=343b41"/></a></td>
+      <td>
+        <a href="https://github.com/Lin-jun-xiang/action-translate-readme">
+          <b>Action Translate Readme</b>
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Lin-jun-xiang/action-translate-readme/stargazers">
+          <img alt="Stars" src="https://img.shields.io/github/stars/Lin-jun-xiang/action-translate-readme?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Lin-jun-xiang/action-translate-readme/network/members">
+          <img alt="Forks" src="https://img.shields.io/github/forks/Lin-jun-xiang/action-translate-readme?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Lin-jun-xiang/action-translate-readme/issues">
+          <img alt="Issues" src="https://img.shields.io/github/issues/Lin-jun-xiang/action-translate-readme?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Lin-jun-xiang/action-translate-readme/pulls">
+          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/Lin-jun-xiang/action-translate-readme?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <a href="https://github.com/Lin-jun-xiang/docGPT-streamlit">
+          <b>Langchain Document GPT</b>
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Lin-jun-xiang/docGPT-streamlit/stargazers">
+          <img alt="Stars" src="https://img.shields.io/github/stars/Lin-jun-xiang/docGPT-streamlit?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Lin-jun-xiang/docGPT-streamlit/network/members">
+          <img alt="Forks" src="https://img.shields.io/github/forks/Lin-jun-xiang/docGPT-streamlit?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Lin-jun-xiang/docGPT-streamlit/issues">
+          <img alt="Issues" src="https://img.shields.io/github/issues/Lin-jun-xiang/docGPT-streamlit?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Lin-jun-xiang/docGPT-streamlit/pulls">
+          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/Lin-jun-xiang/docGPT-streamlit?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <a href="https://github.com/Simatwa/python-tgpt">
+          <b>python-tgpt</b>
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Simatwa/python-tgpt/stargazers">
+          <img alt="Stars" src="https://img.shields.io/github/stars/Simatwa/python-tgpt?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Simatwa/python-tgpt/network/members">
+          <img alt="Forks" src="https://img.shields.io/github/forks/Simatwa/python-tgpt?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Simatwa/python-tgpt/issues">
+          <img alt="Issues" src="https://img.shields.io/github/issues/Simatwa/python-tgpt?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
+      <td>
+        <a href="https://github.com/Simatwa/python-tgpt/pulls">
+          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/Simatwa/python-tgpt?style=flat-square&labelColor=343b41" />
+        </a>
+      </td>
     </tr>
   </tbody>
 </table>

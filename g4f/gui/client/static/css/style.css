@@ -482,23 +482,16 @@ body {
     display: none;
 }
 
-label[for="image"]:has(> input:valid){
-    color: var(--accent);
-}
-
-label[for="camera"]:has(> input:valid){
-    color: var(--accent);
-}
-
-label[for="file"]:has(> input:valid){
-    color: var(--accent);
-}
-
-label[for="image"], label[for="file"], label[for="camera"] {
+.file-label {
     cursor: pointer;
     position: absolute;
     top: 10px;
     left: 10px;
+}
+
+.file-label:has(> input:valid),
+.file-label.selected {
+    color: var(--accent);
 }
 
 label[for="image"] {
@@ -1026,4 +1019,18 @@ a:-webkit-any-link {
     outline: none;
     padding: var(--inner-gap) var(--section-gap);
     resize: vertical;
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+}
+::-webkit-scrollbar-track {
+    background: var(--colour-3);
+}
+::-webkit-scrollbar-thumb {
+    background: var(--blur-bg);
+    border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent)
 }
