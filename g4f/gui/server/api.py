@@ -2,43 +2,13 @@ from __future__ import annotations
 
 import logging
 import json
-import os.path
 from typing import Iterator
-from uuid import uuid4
-from functools import partial
-
-try:
-    import webview
-    import platformdirs
-    from plyer import camera
-    from plyer import filechooser
-    app_storage_path = platformdirs.user_pictures_dir
-    user_select_image = partial(
-        filechooser.open_file,
-        path=platformdirs.user_pictures_dir(),
-        filters=[["Image", "*.jpg", "*.jpeg", "*.png", "*.webp", "*.svg"]],
-    )
-    has_plyer = True
-except ImportError:
-    has_plyer = False
-try:
-    from android.runnable import run_on_ui_thread
-    import android.permissions
-    from android.permissions import Permission
-    from android.permissions import _RequestPermissionsManager
-    _RequestPermissionsManager.register_callback()
-    from .android_gallery import user_select_image
-    has_android = True
-except:
-    run_on_ui_thread = lambda a : a
-    has_android = False
 
 from g4f import version, models
 from g4f import get_last_provider, ChatCompletion
 from g4f.errors import VersionNotFoundError
 from g4f.Provider import ProviderType, __providers__, __map__
 from g4f.providers.base_provider import ProviderModelMixin
-from g4f.Provider.bing.create_images import patch_provider
 from g4f.providers.conversation import BaseConversation
 
 conversations: dict[dict[str, BaseConversation]] = {}
@@ -100,75 +70,6 @@ class Api():
         """
         return {'title': ''}
 
-    def get_conversation(self, options: dict, **kwargs) -> Iterator:
-        window = webview.windows[0]
-        if hasattr(self, "image") and self.image is not None:
-            kwargs["image"] = open(self.image, "rb")
-        for message in self._create_response_stream(
-            self._prepare_conversation_kwargs(options, kwargs),
-            options.get("conversation_id"),
-            options.get('provider')
-        ):
-            if not window.evaluate_js(f"if (!this.abort) this.add_message_chunk({json.dumps(message)}); !this.abort && !this.error;"):
-                break
-        self.image = None
-        self.set_selected(None)
-
-    @run_on_ui_thread
-    def choose_file(self):
-        self.request_permissions()
-        filechooser.open_file(
-            path=platformdirs.user_pictures_dir(),
-            on_selection=print
-        )
-
-    @run_on_ui_thread
-    def choose_image(self):
-        self.request_permissions()
-        user_select_image(
-            on_selection=self.on_image_selection
-        )
-
-    @run_on_ui_thread
-    def take_picture(self):
-        self.request_permissions()
-        filename = os.path.join(app_storage_path(), f"chat-{uuid4()}.png")
-        camera.take_picture(filename=filename, on_complete=self.on_camera)
-
-    def on_image_selection(self, filename):
-        filename = filename[0] if isinstance(filename, list) else filename
-        if filename is not None and os.path.exists(filename):
-            self.image = filename
-        else:
-            self.image = None
-        self.set_selected(None if self.image is None else "image")
-
-    def on_camera(self, filename):
-        if filename is not None and os.path.exists(filename):
-            self.image = filename
-        else:
-            self.image = None
-        self.set_selected(None if self.image is None else "camera")
-
-    def set_selected(self, input_id: str = None):
-        window = webview.windows[0]
-        if window is not None:
-            window.evaluate_js(
-                f"document.querySelector(`.image-label.selected`)?.classList.remove(`selected`);"
-            )
-            if input_id is not None and input_id in ("image", "camera"):
-                window.evaluate_js(
-                    f'document.querySelector(`label[for="{input_id}"]`)?.classList.add(`selected`);'
-                )
-
-    def request_permissions(self):
-        if has_android:
-            android.permissions.request_permissions([
-                Permission.CAMERA,
-                Permission.READ_EXTERNAL_STORAGE,
-                Permission.WRITE_EXTERNAL_STORAGE
-            ])
-
     def _prepare_conversation_kwargs(self, json_data: dict, kwargs: dict):
         """
         Prepares arguments for chat completion based on the request data.
@@ -197,9 +98,7 @@ class Api():
         if conversation_id and provider in conversations and conversation_id in conversations[provider]:
             kwargs["conversation"] = conversations[provider][conversation_id]
 
-        model = json_data.get('model')
-        model = model if model else models.default
-        patch = patch_provider if json_data.get('patch_provider') else None
+        model = json_data.get('model') or models.default
 
         return {
             "model": model,
@@ -207,7 +106,6 @@ class Api():
             "messages": messages,
             "stream": True,
             "ignore_stream": True,
-            "patch_provider": patch,
             "return_conversation": True,
             **kwargs
         }
@@ -260,7 +158,7 @@ class Api():
             'type': response_type,
             response_type: content
         }
-    
+
 def get_error_message(exception: Exception) -> str:
     """
     Generates a formatted error message from an exception.
@@ -271,4 +169,8 @@ def get_error_message(exception: Exception) -> str:
     Returns:
         str: A formatted error message string.
     """
-    return f"{get_last_provider().__name__}: {type(exception).__name__}: {exception}"
+    message = f"{type(exception).__name__}: {exception}"
+    provider = get_last_provider()
+    if provider is None:
+        return message
+    return f"{provider.__name__}: {message}"

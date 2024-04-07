@@ -512,13 +512,15 @@ label[for="camera"] {
     }
 }
 
-.buttons input[type="checkbox"] {
+.buttons input[type="checkbox"],
+.settings input[type="checkbox"] {
     height: 0;
     width: 0;
     display: none;
 }
 
-.buttons label {
+.buttons label,
+.settings label.toogle {
     cursor: pointer;
     text-indent: -9999px;
     width: 50px;
@@ -535,7 +537,8 @@ label[for="camera"] {
     transition: 0.33s;
 }
 
-.buttons label:after {
+.buttons label:after,
+.settings label.toogle:after {
     content: "";
     position: absolute;
     top: 50%;
@@ -548,7 +551,8 @@ label[for="camera"] {
     transition: 0.33s;
 }
 
-.buttons input:checked+label {
+.buttons input:checked+label,
+.settings input:checked+label {
     background: var(--accent);
 }
 
@@ -876,7 +880,6 @@ a:-webkit-any-link {
     width: 1px;
 }
 
-
 .color-picker>fieldset {
     border: 0;
     display: flex;
@@ -1010,15 +1013,39 @@ a:-webkit-any-link {
     border: 1px solid #e4d4ffc9;
 }
 
-#systemPrompt {
+#systemPrompt, .settings textarea {
     font-size: 15px;
     width: 100%;
     color: var(--colour-3);
-    min-height: 59px;
-    height: 59px;
+    min-height: 50px;
+    height: 50px;
     outline: none;
     padding: var(--inner-gap) var(--section-gap);
     resize: vertical;
+}
+
+.settings {
+    width: 100%;
+    display: none;
+}
+
+.settings .field {
+    margin: var(--inner-gap) 0;
+}
+
+.settings textarea {
+    background-color: transparent;
+    border: none;
+    padding: var(--inner-gap) 0;
+}
+
+.settings .label {
+    font-size: 15px;
+    padding: var(--inner-gap) 0;
+    width: fit-content;
+    min-width: 190px;
+    margin-left: var(--section-gap);
+    white-space:nowrap;
 }
 
 ::-webkit-scrollbar {
@@ -1033,4 +1060,21 @@ a:-webkit-any-link {
 }
 ::-webkit-scrollbar-thumb:hover {
     background: var(--accent)
+}
+
+.hljs {
+    color: #e9e9f4;
+    background: #28293629;
+    border-radius: var(--border-radius-1);
+    border: 1px solid var(--blur-border);
+    font-size: 15px;
+}
+
+#message-input {
+    height: 82px;
+    margin-left: 20px;
+}
+
+#message-input::-webkit-scrollbar {
+    width: 5px;
 }

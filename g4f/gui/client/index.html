@@ -41,39 +41,6 @@
         const user_image = '<img src="/static/img/user.png" alt="your avatar">';
         const gpt_image = '<img src="/static/img/gpt.png" alt="your avatar">';
     </script>
-    <style>
-        .hljs {
-            color: #e9e9f4;
-            background: #28293629;
-            border-radius: var(--border-radius-1);
-            border: 1px solid var(--blur-border);
-            font-size: 15px;
-        }
-
-        #message-input {
-            height: 82px;
-            margin-left: 20px;
-        }
-
-        #message-input::-webkit-scrollbar {
-            width: 5px;
-        }
-
-        /* Track */
-        #message-input::-webkit-scrollbar-track {
-            background: #f1f1f1;
-        }
-
-        /* Handle */
-        #message-input::-webkit-scrollbar-thumb {
-            background: #c7a2ff;
-        }
-
-        /* Handle on hover */
-        #message-input::-webkit-scrollbar-thumb:hover {
-            background: #8b3dff;
-        }
-    </style>
     <script src="/static/js/highlight.min.js"></script>
     <script>window.conversation_id = "{{chat_id}}"</script>
     <title>g4f - gui</title>
@@ -82,7 +49,7 @@
 <body>
     <div class="gradient"></div>
     <div class="row">
-        <div class="box conversations">
+        <div class="box conversations hidden">
             <div class="top">
                 <button class="new_convo" onclick="new_conversation()">
                     <i class="fa-regular fa-plus"></i>
@@ -107,6 +74,37 @@
                     <i class="fa-solid fa-star"></i>
                     <span id="version_text" class="convo-title"></span>
                 </div>
+            </div>
+        </div>
+        <div class="settings">
+            <div class="field box">
+                <label for="OpenaiChat-api_key" class="label" title="">OpenaiChat: access_token</label>
+                <textarea id="OpenaiChat-api_key" name="OpenaiChat[api_key]" placeholder="..."></textarea>
+            </div>
+            <div class="field">
+                <span class="label">OpenaiChat: Auto continue</span>
+                <input id="OpenaiChat-auto_continue" type="checkbox" name="OpenaiChat[auto_continue]" checked/>
+                <label for="OpenaiChat-auto_continue" class="toogle" title=""></label>
+            </div>
+            <div class="field box">
+                <label for="Bing-api_key" class="label" title="">Bing: "_U" cookie</label>
+                <textarea id="Bing-api_key" name="Bing[api_key]" placeholder="..."></textarea>
+            </div>
+            <div class="field box">
+                <label for="Gemini-api_key" class="label" title="">Gemini: Auth cookies</label>
+                <textarea id="Gemini-api_key" name="Gemini[api_key]" placeholder="..."></textarea>
+            </div>
+            <div class="field box">
+                <label for="Openai-api_key" class="label" title="">Openai: api_key</label>
+                <textarea id="Openai-api_key" name="Openai[api_key]" placeholder="..."></textarea>
+            </div>
+            <div class="field box">
+                <label for="GeminiPro-api_key" class="label" title="">GeminiPro: api_key</label>
+                <textarea id="GeminiPro-api_key" name="GeminiPro[api_key]" placeholder="..."></textarea>
+            </div>
+            <div class="field box">
+                <label for="HuggingFace-api_key" class="label" title="">HuggingFace: api_key</label>
+                <textarea id="HuggingFace-api_key" name="HuggingFace[api_key]" placeholder="..."></textarea>
             </div>
         </div>
         <div class="conversation">
