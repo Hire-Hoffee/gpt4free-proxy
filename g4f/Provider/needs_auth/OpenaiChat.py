@@ -35,6 +35,7 @@ from ... import debug
 class OpenaiChat(AsyncGeneratorProvider, ProviderModelMixin):
     """A class for creating and managing conversations with OpenAI chat service"""
 
+    lebel = "OpenAI ChatGPT"
     url = "https://chat.openai.com"
     working = True
     supports_gpt_35_turbo = True
@@ -43,7 +44,7 @@ class OpenaiChat(AsyncGeneratorProvider, ProviderModelMixin):
     supports_system_message = True
     default_model = None
     models = ["gpt-3.5-turbo", "gpt-4", "gpt-4-gizmo"]
-    model_aliases = {"text-davinci-002-render-sha": "gpt-3.5-turbo", "": "gpt-3.5-turbo"}
+    model_aliases = {"text-davinci-002-render-sha": "gpt-3.5-turbo", "": "gpt-3.5-turbo", "gpt-4-turbo-preview": "gpt-4"}
     _api_key: str = None
     _headers: dict = None
     _cookies: Cookies = None
@@ -333,6 +334,7 @@ class OpenaiChat(AsyncGeneratorProvider, ProviderModelMixin):
         Raises:
             RuntimeError: If an error occurs during processing.
         """
+
         async with StreamSession(
             proxies={"all": proxy},
             impersonate="chrome",
@@ -358,6 +360,7 @@ class OpenaiChat(AsyncGeneratorProvider, ProviderModelMixin):
                     if debug.logging:
                         print("OpenaiChat: Load default_model failed")
                         print(f"{e.__class__.__name__}: {e}")
+                        
 
             arkose_token = None
             if cls.default_model is None:
@@ -368,6 +371,8 @@ class OpenaiChat(AsyncGeneratorProvider, ProviderModelMixin):
                 except NoValidHarFileError:
                     ...
                 if cls._api_key is None:
+                    if debug.logging:
+                        print("Getting access token with nodriver.")
                     await cls.nodriver_access_token()
                 cls.default_model = cls.get_model(await cls.get_default_model(session, cls._headers))
 
@@ -383,6 +388,9 @@ class OpenaiChat(AsyncGeneratorProvider, ProviderModelMixin):
                 blob = data["arkose"]["dx"]
                 need_arkose = data["arkose"]["required"]
                 chat_token = data["token"]
+                
+                if debug.logging:
+                    print(f'Arkose: {need_arkose} Turnstile: {data["turnstile"]["required"]}')
 
             if need_arkose and arkose_token is None:
                 arkose_token, api_key, cookies = await getArkoseAndAccessToken(proxy)
@@ -581,6 +589,7 @@ this.fetch = async (url, options) => {
             user_data_dir = user_config_dir("g4f-nodriver")
         except:
             user_data_dir = None
+        
         browser = await uc.start(user_data_dir=user_data_dir)
         page = await browser.get("https://chat.openai.com/")
         while await page.query_selector("#prompt-textarea") is None:

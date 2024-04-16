@@ -1026,9 +1026,10 @@ async function on_api() {
     });
 
     providers = await api("providers")
-    providers.forEach((provider) => {
+    Object.entries(providers).forEach(([provider, label]) => {
         let option = document.createElement("option");
-        option.value = option.text = provider;
+        option.value = provider;
+        option.text = label;
         providerSelect.appendChild(option);
     })
 
@@ -1073,7 +1074,7 @@ async function load_version() {
 }
 setTimeout(load_version, 2000);
 
-for (const el of [imageInput, cameraInput]) {
+[imageInput, cameraInput].forEach((el) => {
     el.addEventListener('click', async () => {
         el.value = '';
         if (imageInput.dataset.src) {
@@ -1081,7 +1082,7 @@ for (const el of [imageInput, cameraInput]) {
             delete imageInput.dataset.src
         }
     });
-}
+});
 
 fileInput.addEventListener('click', async (event) => {
     fileInput.value = '';
@@ -1260,34 +1261,26 @@ if (SpeechRecognition) {
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
 
-    function may_stop() {
-        if (microLabel.classList.contains("recognition")) {
-            //recognition.stop();
-        }
-    }
-
     let startValue;
-    let timeoutHandle;
+    let shouldStop;
     let lastDebounceTranscript;
     recognition.onstart = function() {
         microLabel.classList.add("recognition");
         startValue = messageInput.value;
-        messageInput.placeholder = "";
+        shouldStop = false;
         lastDebounceTranscript = "";
-        timeoutHandle = window.setTimeout(may_stop, 10000);
     };
     recognition.onend = function() {
-        microLabel.classList.remove("recognition");
-        messageInput.value = messageInput.placeholder;
-        messageInput.placeholder = "Ask a question";
-        //messageInput.focus();
+        if (shouldStop) {
+            messageInput.focus();
+        } else {
+            recognition.start();
+        }
     };
     recognition.onresult = function(event) {
         if (!event.results) {
             return;
         }
-        window.clearTimeout(timeoutHandle);
-
         let result = event.results[event.resultIndex];
         let isFinal = result.isFinal && (result[0].confidence > 0);
         let transcript = result[0].transcript;
@@ -1298,21 +1291,20 @@ if (SpeechRecognition) {
             lastDebounceTranscript = transcript;
         }
         if (transcript) {
-            messageInput.placeholder = `${startValue ? startValue+"\n" : ""}${transcript.trim()}`;
+            messageInput.value = `${startValue ? startValue+"\n" : ""}${transcript.trim()}`;
             if (isFinal) {
-                startValue = messageInput.placeholder;
+                startValue = messageInput.value;
             }
             messageInput.style.height = messageInput.scrollHeight  + "px";
             messageInput.scrollTop = messageInput.scrollHeight;
         }
-
-        timeoutHandle = window.setTimeout(may_stop, transcript ? 10000 : 8000);
     };
 
     microLabel.addEventListener("click", () => {
         if (microLabel.classList.contains("recognition")) {
-            window.clearTimeout(timeoutHandle);
+            shouldStop = true;
             recognition.stop();
+            microLabel.classList.remove("recognition");
         } else {
             const lang = document.getElementById("recognition-language")?.value;
             recognition.lang = lang || navigator.language;
