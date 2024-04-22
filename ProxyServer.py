@@ -15,11 +15,7 @@ async def get_data():
                 messages=data.get("messages"),
             )
 
-            if (
-                response
-                and response != "流量异常"
-                and response != "流量异常,请尝试更换网络环境"
-            ):
+            if response and response[:4] != "流量异常":
                 print("\nResponse model:", model)
                 return response
 
