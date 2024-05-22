@@ -1,6 +1,7 @@
 from flask import Flask, request
-import g4f
 from langdetect import detect
+import g4f
+import asyncio
 
 app = Flask(__name__)
 
@@ -11,9 +12,12 @@ async def get_data():
 
     for model in g4f.models._all_models:
         try:
-            response = await g4f.ChatCompletion.create_async(
-                model=model,
-                messages=data.get("messages"),
+            response = await asyncio.wait_for(
+                g4f.ChatCompletion.create_async(
+                    model=model,
+                    messages=data.get("messages"),
+                ),
+                timeout=10,
             )
 
             if response and detect(response) != "zh-cn":
