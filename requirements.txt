@@ -11,6 +11,7 @@ werkzeug
 loguru
 tiktoken
 flask [async]
+langdetect
 pillow
 platformdirs
 fastapi
