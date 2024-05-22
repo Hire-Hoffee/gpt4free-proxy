@@ -1,5 +1,6 @@
 from flask import Flask, request
 import g4f
+from langdetect import detect
 
 app = Flask(__name__)
 
@@ -15,7 +16,7 @@ async def get_data():
                 messages=data.get("messages"),
             )
 
-            if response and response[:4] != "流量异常" and "系统公告" not in response:
+            if response and detect(response) != "zh-cn":
                 print("\nResponse model:", model)
                 return response
 
