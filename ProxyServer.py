@@ -1,14 +1,15 @@
-from flask import Flask, request
+from fastapi import FastAPI, Request
+import uvicorn
 from langdetect import detect
 import g4f
 import asyncio
 
-app = Flask(__name__)
+app = FastAPI()
 
 
-@app.route("/data", methods=["POST"])
-async def get_data():
-    data = request.json
+@app.post("/data")
+async def get_data(request: Request):
+    data = await request.json()
 
     for model in g4f.models._all_models:
         try:
@@ -30,4 +31,4 @@ async def get_data():
     return "Some error occurred :("
 
 
-app.run(port=8989, host="0.0.0.0")
+uvicorn.run(app, host="0.0.0.0", port=8989)
