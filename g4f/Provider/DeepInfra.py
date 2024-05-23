@@ -8,11 +8,10 @@ class DeepInfra(Openai):
     label = "DeepInfra"
     url = "https://deepinfra.com"
     working = True
-    needs_auth = False
-    has_auth = True
+    needs_auth = True
     supports_stream = True
     supports_message_history = True
-    default_model = "meta-llama/Meta-Llama-3-70b-instruct"
+    default_model = "meta-llama/Meta-Llama-3-70B-Instruct"
     default_vision_model = "llava-hf/llava-1.5-7b-hf"
     model_aliases = {
         'dbrx-instruct': 'databricks/dbrx-instruct',

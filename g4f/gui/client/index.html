@@ -19,8 +19,7 @@
     <script src="/static/js/highlightjs-copy.min.js"></script>
     <script src="/static/js/chat.v1.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.1/dist/markdown-it.min.js"></script>
-    <link rel="stylesheet"
-        href="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.7.0/build/styles/base16/dracula.min.css">
+    <link rel="stylesheet" href="/static/css/dracula.min.css">
     <script>
         MathJax = {
             chtml: {
@@ -33,10 +32,10 @@
     <script type="module" src="https://cdn.jsdelivr.net/npm/mistral-tokenizer-js" async>
         import mistralTokenizer from "mistral-tokenizer-js"
     </script>
-    <script type="module" src="https://belladoreai.github.io/llama-tokenizer-js/llama-tokenizer.js" async>
+    <script type="module" src="https://cdn.jsdelivr.net/gh/belladoreai/llama-tokenizer-js@master/llama-tokenizer.js" async>
         import llamaTokenizer from "llama-tokenizer-js"
     </script>
-    <script src="https://unpkg.com/gpt-tokenizer/dist/cl100k_base.js" async></script>
+    <script src="https://cdn.jsdelivr.net/npm/gpt-tokenizer/dist/cl100k_base.js" async></script>
     <script src="/static/js/text_to_speech/index.js" async></script>
     <!--
             <script src="/static/js/whisper-web/index.js" async></script>
@@ -94,22 +93,27 @@
             <div class="paper">
             <h3>Settings</h3>
             <div class="field">
-                <span class="label">Web Access</span>
+                <span class="label">Enable Dark Mode</span>
+                <input type="checkbox" id="darkMode" checked />
+                <label for="darkMode" class="toogle" title=""></label>
+            </div>
+            <div class="field">
+                <span class="label">Web Access with DuckDuckGo</span>
                 <input type="checkbox" id="switch" />
                 <label for="switch" class="toogle" title="Add the pages of the first 5 search results to the query."></label>
             </div>
             <div class="field">
-                <span class="label">Disable History</span>
+                <span class="label">Disable Conversation History</span>
                 <input type="checkbox" id="history" />
                 <label for="history" class="toogle" title="To improve the reaction time or if you have trouble with large conversations."></label>
             </div>
             <div class="field">
-                <span class="label">Hide System prompt</span>
+                <span class="label">Hide System-prompt</span>
                 <input type="checkbox" id="hide-systemPrompt" />
                 <label for="hide-systemPrompt" class="toogle" title="For more space on phones"></label>
             </div>
             <div class="field">
-                <span class="label">Auto continue</span>
+                <span class="label">Auto continue in ChatGPT</span>
                 <input id="auto_continue" type="checkbox" name="auto_continue" checked/>
                 <label for="auto_continue" class="toogle" title="Continue large responses in OpenaiChat"></label>
             </div>
@@ -122,8 +126,8 @@
                 <input type="text" id="recognition-language" value="" placeholder="navigator.language"/>
             </div>
             <div class="field box">
-                <label for="Bing-api_key" class="label" title="">Bing:</label>
-                <textarea id="Bing-api_key" name="Bing[api_key]" class="BingCreateImages-api_key" placeholder="&quot;_U&quot; cookie"></textarea>
+                <label for="BingCreateImages-api_key" class="label" title="">Microsoft Designer in Bing:</label>
+                <textarea id="BingCreateImages-api_key" name="BingCreateImages[api_key]" placeholder="&quot;_U&quot; cookie"></textarea>
             </div>
             <div class="field box">
                 <label for="DeepInfra-api_key" class="label" title="">DeepInfra:</label>
@@ -146,12 +150,12 @@
                 <textarea id="Openai-api_key" name="Openai[api_key]" placeholder="api_key"></textarea>
             </div>
             <div class="field box">
-                <label for="OpenaiAccount-api_key" class="label" title="">OpenAI ChatGPT:</label>
-                <textarea id="OpenaiAccount-api_key" name="OpenaiAccount[api_key]" class="OpenaiChat-api_key" placeholder="access_key"></textarea>
-            </div>
-            <div class="field box">
                 <label for="OpenRouter-api_key" class="label" title="">OpenRouter:</label>
                 <textarea id="OpenRouter-api_key" name="OpenRouter[api_key]" placeholder="api_key"></textarea>
+            </div>
+            <div class="field box">
+                <label for="PerplexityApi-api_key" class="label" title="">Perplexity API:</label>
+                <textarea id="PerplexityApi-api_key" name="PerplexityApi[api_key]" placeholder="api_key"></textarea>
             </div>
             <div class="field box">
                 <label for="Replicate-api_key" class="label" title="">Replicate:</label>
@@ -170,11 +174,17 @@
             </div>
         </div>
         <div class="conversation">
-            <textarea id="systemPrompt" class="box" placeholder="System prompt"></textarea>    
+            <textarea id="systemPrompt" class="box" placeholder="System prompt"></textarea>
             <div id="messages" class="box"></div>
+            <button class="slide-systemPrompt">
+                <i class="fa-solid fa-angles-up"></i>
+            </button>
             <div class="toolbar">
                 <div id="input-count" class="">
-                    &nbsp;
+                    <button class="hide-input">
+                        <i class="fa-solid fa-angles-down"></i>
+                    </button>
+                    <span class="text"></span>
                 </div>
                 <div class="stop_generating stop_generating-hidden">
                     <button id="cancelButton">
@@ -244,8 +254,5 @@
     <div class="mobile-sidebar">
         <i class="fa-solid fa-bars"></i>
     </div>
-    <script>
-    </script>
 </body>
-
 </html>

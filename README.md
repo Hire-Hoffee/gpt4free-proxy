@@ -2,7 +2,7 @@
 
 <a href="https://trendshift.io/repositories/1692" target="_blank"><img src="https://trendshift.io/api/badge/repositories/1692" alt="xtekky%2Fgpt4free | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
-Written by [@xtekky](https://github.com/hlohaus) & maintained by [@hlohaus](https://github.com/hlohaus)
+Written by [@xtekky](https://github.com/xtekky) & maintained by [@hlohaus](https://github.com/hlohaus)
 
 <div id="top"></div>
 
@@ -24,6 +24,7 @@ docker pull hlohaus789/g4f
 
 ## 🆕 What's New
 
+- Added `gpt-4o`, simply use `gpt-4o` in `chat.completion.create`.
 - Installation Guide for Windows (.exe): 💻 [#installation-guide-for-windows](#installation-guide-for-windows-exe)
 - Join our Telegram Channel: 📨 [telegram.me/g4f_channel](https://telegram.me/g4f_channel)
 - Join our Discord Group: 💬 [discord.gg/XfybzPXPH5](https://discord.gg/XfybzPXPH5)
@@ -91,7 +92,12 @@ As per the survey, here is a list of improvements to come
 
 ```sh
 docker pull hlohaus789/g4f
-docker run -p 8080:8080 -p 1337:1337 -p 7900:7900 --shm-size="2g" -v ${PWD}/har_and_cookies:/app/har_and_cookies hlohaus789/g4f:latest
+docker run \
+  -p 8080:8080 -p 1337:1337 -p 7900:7900 \
+  --shm-size="2g" \
+  -v ${PWD}/har_and_cookies:/app/har_and_cookies \
+  -v ${PWD}/generated_images:/app/generated_images \
+  hlohaus789/g4f:latest
 ```
 
 3. **Access the Client:** 
@@ -103,12 +109,10 @@ docker run -p 8080:8080 -p 1337:1337 -p 7900:7900 --shm-size="2g" -v ${PWD}/har_
 
 #### Installation Guide for Windows (.exe)
 To ensure the seamless operation of our application, please follow the instructions below. These steps are designed to guide you through the installation process on Windows operating systems.
-##### Prerequisites
-1. **WebView2 Runtime**: Our application requires the *WebView2 Runtime* to be installed on your system. If you do not have it installed, please download and install it from the [Microsoft Developer Website](https://developer.microsoft.com/en-us/microsoft-edge/webview2/). If you already have *WebView2 Runtime* installed but are encountering issues, navigate to *Installed Windows Apps*, select *WebView2*, and opt for the repair option.
-##### Installation Steps
-2. **Download the Application**: Visit our [latest releases page](https://github.com/xtekky/gpt4free/releases/latest) and download the most recent version of the application, named `g4f.webview.*.exe`.
-3. **File Placement**: Once downloaded, transfer the `.exe` file from your downloads folder to a directory of your choice on your system, and then execute it to run the app.
-##### Post-Installation Adjustment
+### Installation Steps
+1. **Download the Application**: Visit our [latest releases page](https://github.com/xtekky/gpt4free/releases/latest) and download the most recent version of the application, named `g4f.exe.zip`.
+2. **File Placement**: After downloading, locate the `.zip` file in your Downloads folder. Unpack it to a directory of your choice on your system, then execute the `g4f.exe` file to run the app.
+3. **Open GUI**: The app starts a web server with the GUI. Open your favorite browser and navigate to `http://localhost:8080/chat/` to access the application interface.
 4. **Firewall Configuration (Hotfix)**: Upon installation, it may be necessary to adjust your Windows Firewall settings to allow the application to operate correctly. To do this, access your Windows Firewall settings and allow the application.
 
 By following these steps, you should be able to successfully install and run the application on your Windows system. If you encounter any issues during the installation process, please refer to our Issue Tracker or try to get contact over Discord for assistance.
@@ -235,19 +239,39 @@ set_cookies(".google.com", {
 })
 ```
 
-Alternatively, you can place your .har and cookie files in the `/har_and_cookies` directory. To export a cookie file, use the EditThisCookie extension available on the Chrome Web Store: [EditThisCookie Extension](https://chromewebstore.google.com/detail/editthiscookie/fngmhnnpilhplaeedifhccceomclgfbg).
+#### Using .har and Cookie Files
 
-You can also create .har files to capture cookies. If you need further assistance, refer to the next section.
+You can place `.har` and cookie files in the default `./har_and_cookies` directory. To export a cookie file, use the [EditThisCookie Extension](https://chromewebstore.google.com/detail/editthiscookie/fngmhnnpilhplaeedifhccceomclgfbg) available on the Chrome Web Store.
 
-```bash
-python -m g4f.cli api --debug
+#### Creating .har Files to Capture Cookies
+
+To capture cookies, you can also create `.har` files. For more details, refer to the next section.
+
+#### Changing the Cookies Directory and Loading Cookie Files in Python
+
+You can change the cookies directory and load cookie files in your Python environment. To set the cookies directory relative to your Python file, use the following code:
+
+```python
+import os.path
+from g4f.cookies import set_cookies_dir, read_cookie_files
+
+import g4f.debug
+g4f.debug.logging = True
+
+cookies_dir = os.path.join(os.path.dirname(__file__), "har_and_cookies")
+set_cookies_dir(cookies_dir)
+read_cookie_files(cookies_dir)
 ```
+
+### Debug Mode
+
+If you enable debug mode, you will see logs similar to the following:
+
 ```
 Read .har file: ./har_and_cookies/you.com.har
 Cookies added: 10 from .you.com
 Read cookie file: ./har_and_cookies/google.json
 Cookies added: 16 from .google.com
-Starting server... [g4f v-0.0.0] (debug)
 ```
 
 #### .HAR File for OpenaiChat Provider
@@ -301,7 +325,7 @@ set G4F_PROXY=http://host:port
 While we wait for gpt-5, here is a list of new models that are at least better than gpt-3.5-turbo. **Some are better than gpt-4**. Expect this list to grow.
 
 | Website | Provider |  parameters | better than |
-| ------  | -------  |  ------ |  ------ | 
+| ------  | -------  |  ------ |  ------ |
 | [claude-3-opus](https://anthropic.com/) | `g4f.Provider.You` | ?B | gpt-4-0125-preview |
 | [command-r+](https://txt.cohere.com/command-r-plus-microsoft-azure/) | `g4f.Provider.HuggingChat` | 104B | gpt-4-0314 |
 | [llama-3-70b](https://meta.ai/) | `g4f.Provider.Llama` or `DeepInfra` | 70B | gpt-4-0314 |
@@ -417,19 +441,6 @@ While we wait for gpt-5, here is a list of new models that are at least better t
 | Replicate | `g4f.Provider.Replicate` | stability-ai/sdxl| llava-v1.6-34b | [replicate.com](https://replicate.com) |
 | You.com | `g4f.Provider.You` | dall-e-3| ✔️ | [you.com](https://you.com) |
 
-```python
-import requests
-from g4f.client import Client
-
-client = Client()
-image = requests.get("https://change_me.jpg", stream=True).raw
-response = client.chat.completions.create(
-    "",
-    messages=[{"role": "user", "content": "what is in this picture?"}],
-    image=image
-)
-print(response.choices[0].message.content)
-```
 
 ## 🔗 Powered by gpt4free
 
