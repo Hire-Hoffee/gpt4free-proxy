@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
-import uvicorn
 from langdetect import detect
+from datetime import datetime
+import uvicorn
 import g4f
 import asyncio
 
@@ -22,7 +23,9 @@ async def get_data(request: Request):
             )
 
             if response and detect(response) != "zh-cn":
-                print("\nResponse model:", model)
+                print(
+                    f"\nModel: {model}, Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                )
                 return response
 
         except Exception as e:
