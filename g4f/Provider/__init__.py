@@ -25,8 +25,6 @@ from .Cnote            import Cnote
 from .Cohere           import Cohere
 from .DeepInfra        import DeepInfra
 from .DeepInfraImage   import DeepInfraImage
-from .DuckDuckGo       import DuckDuckGo
-from .Ecosia           import Ecosia
 from .Feedough         import Feedough
 from .FlowGpt          import FlowGpt
 from .FreeChatgpt      import FreeChatgpt
@@ -46,6 +44,7 @@ from .MetaAIAccount    import MetaAIAccount
 from .Ollama           import Ollama
 from .PerplexityLabs   import PerplexityLabs
 from .Pi               import Pi
+from .Pizzagpt         import Pizzagpt
 from .Replicate        import Replicate
 from .ReplicateImage   import ReplicateImage
 from .Vercel           import Vercel
