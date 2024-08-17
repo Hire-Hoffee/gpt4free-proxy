@@ -55,16 +55,13 @@ class OpenaiChat(AsyncGeneratorProvider, ProviderModelMixin):
     label = "OpenAI ChatGPT"
     url = "https://chatgpt.com"
     working = True
-    supports_gpt_35_turbo = True
     supports_gpt_4 = True
     supports_message_history = True
     supports_system_message = True
     default_model = None
     default_vision_model = "gpt-4o"
-    models = ["gpt-3.5-turbo", "gpt-4", "gpt-4-gizmo", "gpt-4o", "auto"]
+    models = [ "auto", "gpt-4o-mini", "gpt-4o", "gpt-4", "gpt-4-gizmo"]
     model_aliases = {
-        "text-davinci-002-render-sha": "gpt-3.5-turbo",
-        "": "gpt-3.5-turbo",
         "gpt-4-turbo-preview": "gpt-4",
         "dall-e": "gpt-4",
     }
@@ -406,7 +403,12 @@ class OpenaiChat(AsyncGeneratorProvider, ProviderModelMixin):
                     cls._update_request_args(session)
                     await raise_for_status(response)
                     requirements = await response.json()
-                    need_arkose = requirements.get("arkose", {}).get("required")
+                    text_data = json.loads(requirements.get("text", "{}")) 
+                    need_arkose = text_data.get("turnstile", {}).get("required", False)
+                    if need_arkose:
+                        arkose_token = text_data.get("turnstile", {}).get("dx")
+                    else:
+                        need_arkose = requirements.get("arkose", {}).get("required", False) 
                     chat_token = requirements["token"]        
 
                 if need_arkose and arkose_token is None:
