@@ -1,11 +1,10 @@
 from __future__ import annotations
-
-from aiohttp import ClientSession, ClientResponseError
+import base64
 import re
+from aiohttp import ClientSession, ClientResponseError
 from ..typing import AsyncResult, Messages
 from .base_provider import AsyncGeneratorProvider, ProviderModelMixin
 from .helper import format_prompt
-
 
 class LiteIcoding(AsyncGeneratorProvider, ProviderModelMixin):
     url = "https://lite.icoding.ink"
@@ -20,6 +19,27 @@ class LiteIcoding(AsyncGeneratorProvider, ProviderModelMixin):
         'claude-3.5',
         'gemini-1.5',
     ]
+    
+    model_aliases = {
+        "gpt-4o-mini": "gpt-4o",
+        "gemini-pro": "gemini-1.5",
+    }
+
+    bearer_tokens = [
+        "NWQ2OWNkMjcxYjE0NDIyNmFjMTE5OWIzYzg0OWE1NjY=",
+        "ZDgxNWIwOTU5NTk0ZTRkZDhiNzg3MWRmYWY4Nzk0ODU=" 
+    ]
+    current_token_index = 0
+
+    @classmethod
+    def decode_token(cls, encoded_token: str) -> str:
+        return base64.b64decode(encoded_token).decode('utf-8')
+
+    @classmethod
+    def get_next_bearer_token(cls):
+        encoded_token = cls.bearer_tokens[cls.current_token_index]
+        cls.current_token_index = (cls.current_token_index + 1) % len(cls.bearer_tokens)
+        return cls.decode_token(encoded_token)
 
     @classmethod
     async def create_async_generator(
@@ -29,10 +49,11 @@ class LiteIcoding(AsyncGeneratorProvider, ProviderModelMixin):
         proxy: str = None,
         **kwargs
     ) -> AsyncResult:
+        bearer_token = cls.get_next_bearer_token()
         headers = {
             "Accept": "*/*",
             "Accept-Language": "en-US,en;q=0.9",
-            "Authorization": "Bearer aa3020ee873e40cb8b3f515a0708ebc4",
+            "Authorization": f"Bearer {bearer_token}",
             "Connection": "keep-alive",
             "Content-Type": "application/json;charset=utf-8",
             "DNT": "1",
@@ -75,9 +96,11 @@ class LiteIcoding(AsyncGeneratorProvider, ProviderModelMixin):
                     response.raise_for_status()
                     buffer = ""
                     full_response = ""
+
                     def decode_content(data):
                         bytes_array = bytes([int(b, 16) ^ 255 for b in data.split()])
                         return bytes_array.decode('utf-8')
+
                     async for chunk in response.content.iter_any():
                         if chunk:
                             buffer += chunk.decode()
@@ -87,20 +110,17 @@ class LiteIcoding(AsyncGeneratorProvider, ProviderModelMixin):
                                     content = part[6:].strip()
                                     if content and content != "[DONE]":
                                         content = content.strip('"')
-                                        # Decoding each content block
                                         decoded_content = decode_content(content)
                                         full_response += decoded_content
                     full_response = (
-                    full_response.replace('""', '')  # Handle double quotes
-                                  .replace('" "', ' ')  # Handle space within quotes
+                    full_response.replace('""', '')
+                                  .replace('" "', ' ')
                                   .replace("\\n\\n", "\n\n")
                                   .replace("\\n", "\n")
                                   .replace('\\"', '"')
                                   .strip()
                     )
-                    # Add filter to remove unwanted text
                     filtered_response = re.sub(r'\n---\n.*', '', full_response, flags=re.DOTALL)
-                    # Remove extra quotes at the beginning and end
                     cleaned_response = filtered_response.strip().strip('"')
                     yield cleaned_response
 
