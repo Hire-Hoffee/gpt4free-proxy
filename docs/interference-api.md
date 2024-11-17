@@ -46,7 +46,11 @@ python -m g4f.api.run
 ```
 
 **Once running, the API will be accessible at:** `http://localhost:1337/v1`
-  
+
+**(Advanced) Bind to custom port:**
+```bash
+python -m g4f.cli api --bind "0.0.0.0:2400" 
+```
 
 ## Using the Interference API
 
@@ -64,7 +68,7 @@ curl -X POST "http://localhost:1337/v1/chat/completions" \
                "content": "Hello"
              }
            ],
-           "model": "gpt-3.5-turbo"
+           "model": "gpt-4o-mini"
          }'
 ```
 
@@ -104,7 +108,7 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-    model="gpt-3.5-turbo",
+    model="gpt-4o-mini",
     messages=[{"role": "user", "content": "Write a poem about a tree"}],
     stream=True,
 )
@@ -131,7 +135,7 @@ import requests
 url = "http://localhost:1337/v1/chat/completions"
 
 body = {
-    "model": "gpt-3.5-turbo",
+    "model": "gpt-4o-mini",
     "stream": False,
     "messages": [
         {"role": "assistant", "content": "What can you do?"}

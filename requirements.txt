@@ -8,7 +8,6 @@ PyExecJS
 duckduckgo-search>=5.0
 nest_asyncio
 werkzeug
-loguru
 tiktoken
 langdetect
 pillow
