@@ -1,16 +1,17 @@
 from .gigachat         import *
 
-#from .MetaAIAccount   import MetaAIAccount
-#from .OpenaiAccount   import OpenaiAccount
-
 from .BingCreateImages import BingCreateImages
+from .Cerebras         import Cerebras
+from .CopilotAccount   import CopilotAccount
 from .DeepInfra        import DeepInfra
 from .DeepInfraImage   import DeepInfraImage
 from .Gemini           import Gemini
 from .GeminiPro        import GeminiPro
 from .Groq             import Groq
 from .HuggingFace      import HuggingFace
+from .HuggingFace2     import HuggingFace2
 from .MetaAI           import MetaAI
+from .MetaAIAccount    import MetaAIAccount
 from .OpenaiAPI        import OpenaiAPI
 from .OpenaiChat       import OpenaiChat
 from .PerplexityApi    import PerplexityApi

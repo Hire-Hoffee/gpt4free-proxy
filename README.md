@@ -21,7 +21,7 @@
 > <sup><strong>Stats:</strong></sup> [![Downloads](https://static.pepy.tech/badge/g4f)](https://pepy.tech/project/g4f) [![Downloads](https://static.pepy.tech/badge/g4f/month)](https://pepy.tech/project/g4f)
 
 ```sh
-pip install -U g4f
+pip install -U g4f[all]
 ```
 
 ```sh
@@ -72,12 +72,8 @@ Is your site on this repository and you want to take it down? Send an email to t
       - [Local Inference](docs/local.md)
       - [Configuration](#configuration)
       -  [Full Documentation for Python API](#full-documentation-for-python-api)
-         - **New:**
-            -  [Async Client API from G4F](docs/async_client.md)
-            - [Client API like the OpenAI Python library](docs/client.md)
-         - **Legacy**
-            - [Legacy API with python modules](docs/legacy/legacy.md)
-            - [Legacy AsyncClient API from G4F](docs/legacy/legacy_async_client.md)
+         - [Client API from G4F](docs/client.md)
+         - [AsyncClient API from G4F](docs/async_client.md)
    - [🚀 Providers and Models](docs/providers-and-models.md)
    - [🔗 Powered by gpt4free](#-powered-by-gpt4free)
    - [🤝 Contribute](#-contribute)
@@ -109,6 +105,20 @@ docker run \
   hlohaus789/g4f:latest
 ```
 
+Start the GUI without a browser requirement and in debug mode.
+There's no need to update the Docker image every time.
+Simply remove the g4f package from the image and install the Python package:
+```bash
+docker run \
+  -p 8080:8080 \
+  -v ${PWD}/har_and_cookies:/app/har_and_cookies \
+  -v ${PWD}/generated_images:/app/generated_images \
+  hlohaus789/g4f:latest-slim \
+  rm -r -f /app/g4f/ \
+  && pip install -U g4f[slim] \
+  && python -m g4f.cli gui -d
+```
+
 3. **Access the Client:**
 
    - To use the included client, navigate to: [http://localhost:8080/chat/](http://localhost:8080/chat/)
@@ -123,7 +133,7 @@ To ensure the seamless operation of our application, please follow the instructi
 
 ### Installation Steps
 
-1. **Download the Application**: Visit our [releases page](https://github.com/xtekky/gpt4free/releases/tag/0.3.1.7) and download the most recent version of the application, named `g4f.exe.zip`.
+1. **Download the Application**: Visit our [releases page](https://github.com/xtekky/gpt4free/releases/tag/0.3.4.2) and download the most recent version of the application, named `g4f.exe.zip`.
 2. **File Placement**: After downloading, locate the `.zip` file in your Downloads folder. Unpack it to a directory of your choice on your system, then execute the `g4f.exe` file to run the app.
 3. **Open GUI**: The app starts a web server with the GUI. Open your favorite browser and navigate to `http://localhost:8080/chat/` to access the application interface.
 4. **Firewall Configuration (Hotfix)**: Upon installation, it may be necessary to adjust your Windows Firewall settings to allow the application to operate correctly. To do this, access your Windows Firewall settings and allow the application.
@@ -204,12 +214,11 @@ print(f"Generated image URL: {image_url}")
 
 #### **Full Documentation for Python API**
    - **New:**
-      - **Async Client API from G4F:** [/docs/async_client](docs/async_client.md)
-      - **Client API like the OpenAI Python library:** [/docs/client](docs/client.md)
+      - **Client API from G4F:** [/docs/client](docs/client.md)
+      - **AsyncClient API from G4F:** [/docs/async_client](docs/async_client.md)
    
    - **Legacy:**
-      - **Legacy API with python modules:** [/docs/legacy/legacy](docs/legacy/legacy.md)
-      - **Legacy AsyncClient API from G4F:** [/docs/async_client](docs/legacy/legacy_async_client.md)
+      - **Legacy API with python modules:** [/docs/legacy](docs/legacy.md)
 
 #### Web UI
 **To start the web interface, type the following codes in python:**

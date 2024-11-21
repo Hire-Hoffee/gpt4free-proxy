@@ -19,6 +19,7 @@ from .Blackbox         import Blackbox
 from .ChatGpt          import ChatGpt
 from .ChatGptEs        import ChatGptEs
 from .Cloudflare       import Cloudflare
+from .Copilot          import Copilot
 from .DarkAI           import DarkAI
 from .DDG              import DDG
 from .DeepInfraChat    import DeepInfraChat
@@ -31,14 +32,16 @@ from .MagickPen        import MagickPen
 from .PerplexityLabs   import PerplexityLabs
 from .Pi               import Pi
 from .Pizzagpt         import Pizzagpt
+from .PollinationsAI   import PollinationsAI
 from .Prodia           import Prodia
 from .Reka             import Reka
 from .ReplicateHome    import ReplicateHome
+from .RobocodersAPI    import RobocodersAPI
 from .RubiksAI         import RubiksAI
 from .TeachAnything    import TeachAnything
 from .Upstage          import Upstage
 from .You              import You
-from .Mhystical       import Mhystical
+from .Mhystical        import Mhystical
 
 import sys
 

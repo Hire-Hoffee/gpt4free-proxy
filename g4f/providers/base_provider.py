@@ -7,28 +7,13 @@ from asyncio import AbstractEventLoop
 from concurrent.futures import ThreadPoolExecutor
 from abc import abstractmethod
 from inspect import signature, Parameter
-from typing import Callable, Union
 
 from ..typing import CreateResult, AsyncResult, Messages
-from .types import BaseProvider, FinishReason
-from ..errors import NestAsyncioError, ModelNotSupportedError
+from .types import BaseProvider
+from .asyncio import get_running_loop, to_sync_generator
+from .response import FinishReason, BaseConversation, SynthesizeData
+from ..errors import ModelNotSupportedError
 from .. import debug
-
-if sys.version_info < (3, 10):
-    NoneType = type(None)
-else:
-    from types import NoneType
-
-try:
-    import nest_asyncio
-    has_nest_asyncio = True
-except ImportError:
-    has_nest_asyncio = False
-try:
-    import uvloop
-    has_uvloop = True
-except ImportError:
-    has_uvloop = False
 
 # Set Windows event loop policy for better compatibility with asyncio and curl_cffi
 if sys.platform == 'win32':
@@ -39,26 +24,6 @@ if sys.platform == 'win32':
                 asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     except ImportError:
         pass
-
-def get_running_loop(check_nested: bool) -> Union[AbstractEventLoop, None]:
-    try:
-        loop = asyncio.get_running_loop()
-        # Do not patch uvloop loop because its incompatible.
-        if has_uvloop:
-            if isinstance(loop, uvloop.Loop):
-               return loop
-        if not hasattr(loop.__class__, "_nest_patched"):
-            if has_nest_asyncio:
-                nest_asyncio.apply(loop)
-            elif check_nested:
-                raise NestAsyncioError('Install "nest_asyncio" package | pip install -U nest_asyncio')
-        return loop
-    except RuntimeError:
-        pass
-
-# Fix for RuntimeError: async generator ignored GeneratorExit
-async def await_callback(callback: Callable):
-    return await callback()
 
 class AbstractProvider(BaseProvider):
     """
@@ -100,7 +65,7 @@ class AbstractProvider(BaseProvider):
         )
 
     @classmethod
-    def get_parameters(cls) -> dict:
+    def get_parameters(cls) -> dict[str, Parameter]:
         return signature(
             cls.create_async_generator if issubclass(cls, AsyncGeneratorProvider) else
             cls.create_async if issubclass(cls, AsyncProvider) else
@@ -134,7 +99,6 @@ class AbstractProvider(BaseProvider):
             args += ","
         
         return f"g4f.Provider.{cls.__name__} supports: ({args}\n)"
-
 
 class AsyncProvider(AbstractProvider):
     """
@@ -217,25 +181,9 @@ class AsyncGeneratorProvider(AsyncProvider):
         Returns:
             CreateResult: The result of the streaming completion creation.
         """
-        loop = get_running_loop(check_nested=False)
-        new_loop = False
-        if loop is None:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            new_loop = True
-
-        generator = cls.create_async_generator(model, messages, stream=stream, **kwargs)
-        gen = generator.__aiter__()
-
-        try:
-            while True:
-                yield loop.run_until_complete(await_callback(gen.__anext__))
-        except StopAsyncIteration:
-            pass
-        finally:
-            if new_loop:
-                loop.close()
-                asyncio.set_event_loop(None)
+        return to_sync_generator(
+            cls.create_async_generator(model, messages, stream=stream, **kwargs)
+        )
 
     @classmethod
     async def create_async(
@@ -258,7 +206,7 @@ class AsyncGeneratorProvider(AsyncProvider):
         """
         return "".join([
             str(chunk) async for chunk in cls.create_async_generator(model, messages, stream=False, **kwargs) 
-            if not isinstance(chunk, (Exception, FinishReason))
+            if not isinstance(chunk, (Exception, FinishReason, BaseConversation, SynthesizeData))
         ])
 
     @staticmethod
@@ -290,6 +238,7 @@ class ProviderModelMixin:
     default_model: str = None
     models: list[str] = []
     model_aliases: dict[str, str] = {}
+    image_models: list = None
 
     @classmethod
     def get_models(cls) -> list[str]:
