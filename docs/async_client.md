@@ -154,13 +154,14 @@ import asyncio
 from g4f.client import AsyncClient
 
 async def main():
-    client = AsyncClient()
-    
+    client = AsyncClient(
+        provider=g4f.Provider.CopilotAccount
+    )
+
     image = requests.get("https://raw.githubusercontent.com/xtekky/gpt4free/refs/heads/main/docs/cat.jpeg", stream=True).raw
-    
+
     response = await client.chat.completions.create(
         model=g4f.models.default,
-        provider=g4f.Provider.Bing,
         messages=[
             {
                 "role": "user",
@@ -169,7 +170,7 @@ async def main():
         ],
         image=image
     )
-    
+
     print(response.choices[0].message.content)
 
 asyncio.run(main())
@@ -279,10 +280,9 @@ The G4F AsyncClient supports a wide range of AI models and providers, allowing y
    - OpenAI
    - Google (for Gemini)
    - Anthropic
-   - Bing
+   - Microsoft Copilot 
    - Custom providers
 
-  
 
 **To use a specific model or provider, specify it when creating the client or in the API call:**
 ```python
@@ -292,7 +292,7 @@ client = AsyncClient(provider=g4f.Provider.OpenaiChat)
 
 response = await client.chat.completions.create(
     model="gpt-4",
-    provider=g4f.Provider.Bing,
+    provider=g4f.Provider.CopilotAccount,
     messages=[
         {
             "role": "user",

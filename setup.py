@@ -31,6 +31,7 @@ EXTRA_REQUIRE = {
         "fastapi",                 # api
         "uvicorn",                 # api
         "nodriver",
+        "python-multipart",
     ],
     'slim': [
         "curl_cffi>=0.6.2",
@@ -43,6 +44,7 @@ EXTRA_REQUIRE = {
         "werkzeug", "flask",       # gui
         "fastapi",                 # api
         "uvicorn",                 # api
+        "python-multipart",
     ],
     "image": [
         "pillow",
@@ -64,12 +66,13 @@ EXTRA_REQUIRE = {
     "api": [
         "loguru", "fastapi",
         "uvicorn",
+        "python-multipart",
     ],
     "gui": [
         "werkzeug", "flask",
         "beautifulsoup4", "pillow",
         "duckduckgo-search>=5.0",
-        "browser_cookie3"
+        "browser_cookie3",
     ],
     "search": [
         "beautifulsoup4", "pillow",

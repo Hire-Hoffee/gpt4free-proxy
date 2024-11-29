@@ -7,6 +7,7 @@ from .DeepInfra        import DeepInfra
 from .DeepInfraImage   import DeepInfraImage
 from .Gemini           import Gemini
 from .GeminiPro        import GeminiPro
+from .GithubCopilot    import GithubCopilot
 from .Groq             import Groq
 from .HuggingFace      import HuggingFace
 from .HuggingFace2     import HuggingFace2
@@ -16,6 +17,7 @@ from .OpenaiAPI        import OpenaiAPI
 from .OpenaiChat       import OpenaiChat
 from .PerplexityApi    import PerplexityApi
 from .Poe              import Poe
+from .PollinationsAI   import PollinationsAI
 from .Raycast          import Raycast
 from .Replicate        import Replicate
 from .Theb             import Theb

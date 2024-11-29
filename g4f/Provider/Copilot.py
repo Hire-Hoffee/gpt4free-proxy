@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import json
 import asyncio
 from http.cookiejar import CookieJar
@@ -16,12 +17,13 @@ try:
 except ImportError:
     has_nodriver = False
 
-from .base_provider import AbstractProvider, BaseConversation
+from .base_provider import AbstractProvider, ProviderModelMixin, BaseConversation
 from .helper import format_prompt
 from ..typing import CreateResult, Messages, ImageType
 from ..errors import MissingRequirementsError
 from ..requests.raise_for_status import raise_for_status
-from ..providers.helper import format_cookies
+from ..providers.asyncio import get_running_loop
+from .openai.har_file import NoValidHarFileError, get_headers
 from ..requests import get_nodriver
 from ..image import ImageResponse, to_bytes, is_accepted_format
 from .. import debug
@@ -36,12 +38,16 @@ class Conversation(BaseConversation):
         self.cookie_jar = cookie_jar
         self.access_token = access_token
 
-class Copilot(AbstractProvider):
+class Copilot(AbstractProvider, ProviderModelMixin):
     label = "Microsoft Copilot"
     url = "https://copilot.microsoft.com"
     working = True
     supports_stream = True
     default_model = "Copilot"
+    models = [default_model]
+    model_aliases = {
+        "gpt-4": "Copilot",
+    }
 
     websocket_url = "wss://copilot.microsoft.com/c/api/chat?api-version=2"
     conversation_url = f"{url}/c/api/conversations"
@@ -69,14 +75,21 @@ class Copilot(AbstractProvider):
         cookies = conversation.cookie_jar if conversation is not None else None
         if cls.needs_auth or image is not None:
             if conversation is None or conversation.access_token is None:
-                access_token, cookies = asyncio.run(cls.get_access_token_and_cookies(proxy))
+                try:
+                    access_token, cookies = readHAR()
+                except NoValidHarFileError as h:
+                    debug.log(f"Copilot: {h}")
+                    try:
+                        get_running_loop(check_nested=True)
+                        access_token, cookies = asyncio.run(cls.get_access_token_and_cookies(proxy))
+                    except MissingRequirementsError:
+                        raise h
             else:
                 access_token = conversation.access_token
             debug.log(f"Copilot: Access token: {access_token[:7]}...{access_token[-5:]}")
-            debug.log(f"Copilot: Cookies: {';'.join([*cookies])}")
             websocket_url = f"{websocket_url}&accessToken={quote(access_token)}"
-            headers = {"authorization": f"Bearer {access_token}", "cookie": format_cookies(cookies)}
-    
+            headers = {"authorization": f"Bearer {access_token}"}
+
         with Session(
             timeout=timeout,
             proxy=proxy,
@@ -160,7 +173,9 @@ class Copilot(AbstractProvider):
                     for (var i = 0; i < localStorage.length; i++) {
                         try {
                             item = JSON.parse(localStorage.getItem(localStorage.key(i)));
-                            if (item.credentialType == "AccessToken") {
+                            if (item.credentialType == "AccessToken" 
+                              && item.expiresOn > Math.floor(Date.now() / 1000)
+                              && item.target.includes("ChatAI")) {
                                 return item.secret;
                             }
                         } catch(e) {}
@@ -174,3 +189,28 @@ class Copilot(AbstractProvider):
             cookies[c.name] = c.value
         await page.close()
         return access_token, cookies
+
+def readHAR():
+    api_key = None
+    cookies = None
+    for path in get_har_files():
+        with open(path, 'rb') as file:
+            try:
+                harFile = json.loads(file.read())
+            except json.JSONDecodeError:
+                # Error: not a HAR file!
+                continue
+            for v in harFile['log']['entries']:
+                v_headers = get_headers(v)
+                if v['request']['url'].startswith(Copilot.url):
+                    try:
+                        if "authorization" in v_headers:
+                            api_key = v_headers["authorization"].split(maxsplit=1).pop()
+                    except Exception as e:
+                        debug.log(f"Error on read headers: {e}")
+                    if v['request']['cookies']:
+                        cookies = {c['name']: c['value'] for c in v['request']['cookies']}
+    if api_key is None:
+        raise NoValidHarFileError("No access token found in .har files")
+
+    return api_key, cookies
