@@ -13,6 +13,7 @@ from copy import deepcopy
 from .crypt import decrypt, encrypt
 from ...requests import StreamSession
 from ...cookies import get_cookies_dir
+from ...errors import NoValidHarFileError
 from ... import debug
 
 arkose_url = "https://tcr9i.chat.openai.com/fc/gt2/public_key/35536E1E-65B4-4D96-9D97-6ADB7EFF8147"
@@ -21,13 +22,9 @@ backend_anon_url = "https://chatgpt.com/backend-anon/conversation"
 start_url = "https://chatgpt.com/"
 conversation_url = "https://chatgpt.com/c/"
 
-class NoValidHarFileError(Exception):
-    pass
-
 class RequestConfig:
     cookies: dict = None
     headers: dict = None
-    access_request_id: str = None
     access_token: str = None
     proof_token: list = None
     turnstile_token: str = None
@@ -35,6 +32,7 @@ class RequestConfig:
     arkose_token: str = None
     headers: dict = {}
     cookies: dict = {}
+    data_build: str = "prod-697873d7e78bb14df6e13af3a91fa237cc4db415"
 
 class arkReq:
     def __init__(self, arkURL, arkBx, arkHeader, arkBody, arkCookies, userAgent):

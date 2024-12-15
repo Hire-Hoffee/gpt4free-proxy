@@ -12,15 +12,17 @@ from ..image import ImageResponse, copy_images, images_dir
 from ..typing import Messages, ImageType
 from ..providers.types import ProviderType
 from ..providers.response import ResponseType, FinishReason, BaseConversation, SynthesizeData
-from ..errors import NoImageResponseError, ModelNotFoundError
+from ..errors import NoImageResponseError
 from ..providers.retry_provider import IterListProvider
-from ..providers.asyncio import get_running_loop, to_sync_generator, async_generator_to_list
+from ..providers.asyncio import to_sync_generator, async_generator_to_list
 from ..Provider.needs_auth import BingCreateImages, OpenaiAccount
+from ..image import to_bytes
 from .stubs import ChatCompletion, ChatCompletionChunk, Image, ImagesResponse
 from .image_models import ImageModels
 from .types import IterResponse, ImageProvider, Client as BaseClient
 from .service import get_model_and_provider, get_last_provider, convert_to_provider
 from .helper import find_stop, filter_json, filter_none, safe_aclose, to_async_iterator
+from .. import debug
 
 ChatCompletionResponseType = Iterator[Union[ChatCompletion, ChatCompletionChunk, BaseConversation]]
 AsyncChatCompletionResponseType = AsyncIterator[Union[ChatCompletion, ChatCompletionChunk, BaseConversation]]
@@ -190,6 +192,8 @@ class Completions:
         provider: Optional[ProviderType] = None,
         stream: Optional[bool] = False,
         proxy: Optional[str] = None,
+        image: Optional[ImageType] = None,
+        image_name: Optional[str] = None,
         response_format: Optional[dict] = None,
         max_tokens: Optional[int] = None,
         stop: Optional[Union[list[str], str]] = None,
@@ -208,7 +212,8 @@ class Completions:
             ignore_stream,
         )
         stop = [stop] if isinstance(stop, str) else stop
-
+        if image is not None:
+            kwargs["images"] = [(image, image_name)]
         response = provider.create_completion(
             model,
             messages,
@@ -254,7 +259,7 @@ class Images:
         prompt: str,
         model: str = None,
         provider: Optional[ProviderType] = None,
-        response_format: str = "url",
+        response_format: Optional[str] = None,
         proxy: Optional[str] = None,
         **kwargs
     ) -> ImagesResponse:
@@ -274,11 +279,6 @@ class Images:
             provider_handler = provider
         if provider_handler is None:
             return default
-        if isinstance(provider_handler, IterListProvider):
-            if provider_handler.providers:
-                provider_handler = provider_handler.providers[0]
-            else:
-                raise ModelNotFoundError(f"IterListProvider for model {model} has no providers")
         return provider_handler
 
     async def async_generate(
@@ -286,38 +286,29 @@ class Images:
         prompt: str,
         model: Optional[str] = None,
         provider: Optional[ProviderType] = None,
-        response_format: Optional[str] = "url",
+        response_format: Optional[str] = None,
         proxy: Optional[str] = None,
         **kwargs
     ) -> ImagesResponse:
         provider_handler = await self.get_provider_handler(model, provider, BingCreateImages)
-        provider_name = provider.__name__ if hasattr(provider, "__name__") else type(provider).__name__
+        provider_name = provider_handler.__name__ if hasattr(provider_handler, "__name__") else type(provider_handler).__name__
         if proxy is None:
             proxy = self.client.proxy
 
+        e = None
         response = None
-        if hasattr(provider_handler, "create_async_generator"):
-            messages = [{"role": "user", "content": f"Generate a image: {prompt}"}]
-            async for item in provider_handler.create_async_generator(model, messages, prompt=prompt, **kwargs):
-                if isinstance(item, ImageResponse):
-                    response = item
-                    break
-        elif hasattr(provider_handler, 'create'):
-            if asyncio.iscoroutinefunction(provider_handler.create):
-                response = await provider_handler.create(prompt)
-            else:
-                response = provider_handler.create(prompt) 
-            if isinstance(response, str):
-                response = ImageResponse([response], prompt)
-        elif hasattr(provider_handler, "create_completion"):
-            get_running_loop(check_nested=True)
-            messages = [{"role": "user", "content": f"Generate a image: {prompt}"}]
-            for item in provider_handler.create_completion(model, messages, prompt=prompt, **kwargs):
-                if isinstance(item, ImageResponse):
-                    response = item
-                    break
+        if isinstance(provider_handler, IterListProvider):
+            for provider in provider_handler.providers:
+                try:
+                    response = await self._generate_image_response(provider, provider.__name__, model, prompt, **kwargs)
+                    if response is not None:
+                        provider_name = provider.__name__
+                        break
+                except Exception as e:
+                    debug.log(f"Image provider {provider.__name__}: {e}")
         else:
-            raise ValueError(f"Provider {provider_name} does not support image generation")
+            response = await self._generate_image_response(provider_handler, provider_name, model, prompt, **kwargs)
+
         if isinstance(response, ImageResponse):
             return await self._process_image_response(
                 response,
@@ -327,15 +318,57 @@ class Images:
                 provider_name
             )
         if response is None:
+            if e is not None:
+                raise e
             raise NoImageResponseError(f"No image response from {provider_name}")
         raise NoImageResponseError(f"Unexpected response type: {type(response)}")
+
+    async def _generate_image_response(
+        self,
+        provider_handler,
+        provider_name,
+        model: str,
+        prompt: str,
+        prompt_prefix: str = "Generate a image: ",
+        image: ImageType = None,
+        **kwargs
+    ) -> ImageResponse:
+        messages = [{"role": "user", "content": f"{prompt_prefix}{prompt}"}]
+        response = None
+        if hasattr(provider_handler, "create_async_generator"):
+            async for item in provider_handler.create_async_generator(
+                model,
+                messages,
+                stream=True,
+                prompt=prompt,
+                image=image,
+                **kwargs
+            ):
+                if isinstance(item, ImageResponse):
+                    response = item
+                    break
+        elif hasattr(provider_handler, "create_completion"):
+            for item in provider_handler.create_completion(
+                model,
+                messages,
+                True,
+                prompt=prompt,
+                image=image,
+                **kwargs
+            ):
+                if isinstance(item, ImageResponse):
+                    response = item
+                    break
+        else:
+            raise ValueError(f"Provider {provider_name} does not support image generation")
+        return response
 
     def create_variation(
         self,
         image: ImageType,
         model: str = None,
         provider: Optional[ProviderType] = None,
-        response_format: str = "url",
+        response_format: Optional[str] = None,
         **kwargs
     ) -> ImagesResponse:
         return asyncio.run(self.async_create_variation(
@@ -347,67 +380,68 @@ class Images:
         image: ImageType,
         model: Optional[str] = None,
         provider: Optional[ProviderType] = None,
-        response_format: str = "url",
+        response_format: Optional[str] = None,
         proxy: Optional[str] = None,
         **kwargs
     ) -> ImagesResponse:
         provider_handler = await self.get_provider_handler(model, provider, OpenaiAccount)
-        provider_name = provider.__name__ if hasattr(provider, "__name__") else type(provider).__name__
+        provider_name = provider_handler.__name__ if hasattr(provider_handler, "__name__") else type(provider_handler).__name__
         if proxy is None:
             proxy = self.client.proxy
+        prompt = "create a variation of this image"
 
-        if hasattr(provider_handler, "create_async_generator"):
-            messages = [{"role": "user", "content": "create a variation of this image"}]
-            generator = None
-            try:
-                generator = provider_handler.create_async_generator(model, messages, image=image, response_format=response_format, proxy=proxy, **kwargs)
-                async for chunk in generator:
-                    if isinstance(chunk, ImageResponse):
-                        response = chunk
+        e = None
+        response = None
+        if isinstance(provider_handler, IterListProvider):
+            for provider in provider_handler.providers:
+                try:
+                    response = await self._generate_image_response(provider, provider.__name__, model, prompt, image=image, **kwargs)
+                    if response is not None:
+                        provider_name = provider.__name__
                         break
-            finally:
-                await safe_aclose(generator)
-        elif hasattr(provider_handler, 'create_variation'):
-            if asyncio.iscoroutinefunction(provider.provider_handler):
-                response = await provider_handler.create_variation(image, model=model, response_format=response_format, proxy=proxy, **kwargs)
-            else:
-                response = provider_handler.create_variation(image, model=model, response_format=response_format, proxy=proxy, **kwargs)
+                except Exception as e:
+                    debug.log(f"Image provider {provider.__name__}: {e}")
         else:
-            raise NoImageResponseError(f"Provider {provider_name} does not support image variation")
+            response = await self._generate_image_response(provider_handler, provider_name, model, prompt, image=image, **kwargs)
 
-        if isinstance(response, str):
-            response = ImageResponse([response])
         if isinstance(response, ImageResponse):
-            return self._process_image_response(response, response_format, proxy, model, provider_name)
+            return await self._process_image_response(response, response_format, proxy, model, provider_name)
         if response is None:
+            if e is not None:
+                raise e
             raise NoImageResponseError(f"No image response from {provider_name}")
         raise NoImageResponseError(f"Unexpected response type: {type(response)}")
 
     async def _process_image_response(
         self,
         response: ImageResponse,
-        response_format: str,
+        response_format: Optional[str] = None,
         proxy: str = None,
         model: Optional[str] = None,
         provider: Optional[str] = None
-    ) -> list[Image]:
-        if response_format in ("url", "b64_json"):
-            images = await copy_images(response.get_list(), response.options.get("cookies"), proxy)
-            async def process_image_item(image_file: str) -> Image:
-                if response_format == "b64_json":
+    ) -> ImagesResponse:
+        last_provider = get_last_provider(True)
+        if response_format == "url":
+            # Return original URLs without saving locally
+            images = [Image.model_construct(url=image, revised_prompt=response.alt) for image in response.get_list()]
+        else:
+            # Save locally for None (default) case
+            images = await copy_images(response.get_list(), response.get("cookies"), proxy)
+            if response_format == "b64_json":
+                async def process_image_item(image_file: str) -> Image:
                     with open(os.path.join(images_dir, os.path.basename(image_file)), "rb") as file:
                         image_data = base64.b64encode(file.read()).decode()
-                        return Image.model_construct(url=image_file, b64_json=image_data, revised_prompt=response.alt)
-                return Image.model_construct(url=image_file, revised_prompt=response.alt)
-            images = await asyncio.gather(*[process_image_item(image) for image in images])
-        else:
-            images = [Image.model_construct(url=image, revised_prompt=response.alt) for image in response.get_list()]
-        last_provider = get_last_provider(True)
+                        return Image.model_construct(b64_json=image_data, revised_prompt=response.alt)
+                images = await asyncio.gather(*[process_image_item(image) for image in images])
+            else:
+                images = [Image.model_construct(url=f"/images/{os.path.basename(image)}", revised_prompt=response.alt) for image in images]
         return ImagesResponse.model_construct(
-            images,
+            created=int(time.time()),
+            data=images,
             model=last_provider.get("model") if model is None else model,
             provider=last_provider.get("name") if provider is None else provider
         )
+
 
 class AsyncClient(BaseClient):
     def __init__(
@@ -438,6 +472,8 @@ class AsyncCompletions:
         provider: Optional[ProviderType] = None,
         stream: Optional[bool] = False,
         proxy: Optional[str] = None,
+        image: Optional[ImageType] = None,
+        image_name: Optional[str] = None,
         response_format: Optional[dict] = None,
         max_tokens: Optional[int] = None,
         stop: Optional[Union[list[str], str]] = None,
@@ -456,7 +492,8 @@ class AsyncCompletions:
             ignore_stream,
         )
         stop = [stop] if isinstance(stop, str) else stop
-
+        if image is not None:
+            kwargs["images"] = [(image, image_name)]
         if hasattr(provider, "create_async_generator"):
             create_handler = provider.create_async_generator
         else:
@@ -491,7 +528,7 @@ class AsyncImages(Images):
         prompt: str,
         model: Optional[str] = None,
         provider: Optional[ProviderType] = None,
-        response_format: str = "url",
+        response_format: Optional[str] = None,
         **kwargs
     ) -> ImagesResponse:
         return await self.async_generate(prompt, model, provider, response_format, **kwargs)
@@ -501,7 +538,7 @@ class AsyncImages(Images):
         image: ImageType,
         model: str = None,
         provider: ProviderType = None,
-        response_format: str = "url",
+        response_format: Optional[str] = None,
         **kwargs
     ) -> ImagesResponse:
         return await self.async_create_variation(

@@ -4,21 +4,27 @@ import base64
 import json
 from aiohttp import ClientSession, BaseConnector
 
-from ...typing import AsyncResult, Messages, ImageType
+from ...typing import AsyncResult, Messages, ImagesType
 from ..base_provider import AsyncGeneratorProvider, ProviderModelMixin
 from ...image import to_bytes, is_accepted_format
 from ...errors import MissingAuthError
 from ..helper import get_connector
 
 class GeminiPro(AsyncGeneratorProvider, ProviderModelMixin):
-    label = "Gemini API"
+    label = "Google Gemini API"
     url = "https://ai.google.dev"
+    
     working = True
     supports_message_history = True
     needs_auth = True
+    
     default_model = "gemini-1.5-pro"
     default_vision_model = default_model
     models = [default_model, "gemini-pro", "gemini-1.5-flash", "gemini-1.5-flash-8b"]
+    model_aliases = {
+        "gemini-flash": "gemini-1.5-flash",
+        "gemini-flash": "gemini-1.5-flash-8b",
+    }
 
     @classmethod
     async def create_async_generator(
@@ -30,7 +36,7 @@ class GeminiPro(AsyncGeneratorProvider, ProviderModelMixin):
         api_key: str = None,
         api_base: str = "https://generativelanguage.googleapis.com/v1beta",
         use_auth_header: bool = False,
-        image: ImageType = None,
+        images: ImagesType = None,
         connector: BaseConnector = None,
         **kwargs
     ) -> AsyncResult:
@@ -56,14 +62,15 @@ class GeminiPro(AsyncGeneratorProvider, ProviderModelMixin):
                 for message in messages
                 if message["role"] != "system"
             ]
-            if image is not None:
-                image = to_bytes(image)
-                contents[-1]["parts"].append({
-                    "inline_data": {
-                        "mime_type": is_accepted_format(image),
-                        "data": base64.b64encode(image).decode()
-                    }
-                })
+            if images is not None:
+                for image, _ in images:
+                    image = to_bytes(image)
+                    contents[-1]["parts"].append({
+                        "inline_data": {
+                            "mime_type": is_accepted_format(image),
+                            "data": base64.b64encode(image).decode()
+                        }
+                    })
             data = {
                 "contents": contents,
                 "generationConfig": {

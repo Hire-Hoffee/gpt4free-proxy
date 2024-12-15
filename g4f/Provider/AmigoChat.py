@@ -13,7 +13,7 @@ MODELS = {
     'chat': {
         'gpt-4o-2024-11-20': {'persona_id': "gpt"},
         'gpt-4o': {'persona_id': "summarizer"},
-        'gpt-4o-mini': {'persona_id': "gemini-1-5-flash"},
+        'gpt-4o-mini': {'persona_id': "amigo"},
 
         'o1-preview-': {'persona_id': "openai-o-one"}, # Amigo, your balance is not enough to make the request, wait until 12 UTC or upgrade your plan
         'o1-preview-2024-09-12-': {'persona_id': "orion"}, # Amigo, your balance is not enough to make the request, wait until 12 UTC or upgrade your plan
@@ -24,7 +24,7 @@ MODELS = {
         'codellama/CodeLlama-34b-Instruct-hf': {'persona_id': "codellama-CodeLlama-34b-Instruct-hf"},
         
         'gemini-1.5-pro': {'persona_id': "gemini-1-5-pro"}, # Amigo, your balance is not enough to make the request, wait until 12 UTC or upgrade your plan
-        'gemini-1.5-flash': {'persona_id': "amigo"},
+        'gemini-1.5-flash': {'persona_id': "gemini-1.5-flash"},
         
         'claude-3-5-sonnet-20240620': {'persona_id': "claude"},
         'claude-3-5-sonnet-20241022': {'persona_id': "clude-claude-3-5-sonnet-20241022"},
@@ -65,9 +65,9 @@ MODELS = {
         'flux-pro/v1.1-ultra': {'persona_id': "flux-pro-v1.1-ultra"}, # Amigo, your balance is not enough to make the request, wait until 12 UTC or upgrade your plan
         'flux-pro/v1.1-ultra-raw': {'persona_id': "flux-pro-v1.1-ultra-raw"}, # Amigo, your balance is not enough to make the request, wait until 12 UTC or upgrade your plan
         'flux/dev': {'persona_id': "flux-dev"},
-        
-        'dalle-e-3': {'persona_id': "dalle-three"},
-        
+
+        'dall-e-3': {'persona_id': "dalle-three"},
+
         'recraft-v3': {'persona_id': "recraft"}
     }
 }
@@ -108,7 +108,6 @@ class AmigoChat(AsyncGeneratorProvider, ProviderModelMixin):
         "mythomax-13b": "Gryphe/MythoMax-L2-13b",
         
         "mixtral-7b": "mistralai/Mistral-7B-Instruct-v0.3",
-        "mistral-tiny": "mistralai/mistral-tiny",
         "mistral-nemo": "mistralai/mistral-nemo",
         
         "deepseek-chat": "deepseek-ai/deepseek-llm-67b-chat",
@@ -127,10 +126,7 @@ class AmigoChat(AsyncGeneratorProvider, ProviderModelMixin):
         
         
         ### image ###
-        "flux-realism": "flux-realism",
         "flux-dev": "flux/dev",
-        
-        "dalle-3": "dalle-e-3",
     }
 
     @classmethod
@@ -141,7 +137,12 @@ class AmigoChat(AsyncGeneratorProvider, ProviderModelMixin):
             return MODELS['image'][model]['persona_id']
         else:
             raise ValueError(f"Unknown model: {model}")
-
+            
+    @staticmethod
+    def generate_chat_id() -> str:
+        """Generate a chat ID in format: 8-4-4-4-12 hexadecimal digits"""
+        return str(uuid.uuid4())
+		
     @classmethod
     async def create_async_generator(
         cls,
@@ -182,17 +183,18 @@ class AmigoChat(AsyncGeneratorProvider, ProviderModelMixin):
                     "x-device-language": "en-US",
                     "x-device-platform": "web",
                     "x-device-uuid": device_uuid,
-                    "x-device-version": "1.0.42"
+                    "x-device-version": "1.0.45"
                 }
                 
                 async with StreamSession(headers=headers, proxy=proxy) as session:
                     if model not in cls.image_models:
                         data = {
+                            "chatId": cls.generate_chat_id(),
+                            "frequency_penalty": frequency_penalty,
+                            "max_tokens": max_tokens,
                             "messages": messages,
                             "model": model,
                             "personaId": cls.get_personaId(model),
-                            "frequency_penalty": frequency_penalty,
-                            "max_tokens": max_tokens,
                             "presence_penalty": presence_penalty,
                             "stream": stream,
                             "temperature": temperature,
