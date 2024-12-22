@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  proxy:
+    build:
+      context: .
+    ports:
+      - "8989:8989"
+    deploy:
+      resources:
+        limits:
+          memory: 150M
+    restart: on-failure
