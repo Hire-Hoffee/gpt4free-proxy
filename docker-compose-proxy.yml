@@ -2,6 +2,8 @@ version: "3.8"
 
 services:
   proxy:
+    image: g4f-proxy
+    container_name: g4f-proxy-container
     build:
       context: .
     ports:
