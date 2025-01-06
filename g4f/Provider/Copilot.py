@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import json
 import asyncio
 import base64
@@ -17,18 +18,19 @@ try:
 except ImportError:
     has_nodriver = False
 
-from .base_provider import AbstractProvider, ProviderModelMixin, BaseConversation
-from .helper import format_prompt
+from .base_provider import AbstractProvider, ProviderModelMixin
+from .helper import format_prompt_max_length
+from .openai.har_file import get_headers, get_har_files
 from ..typing import CreateResult, Messages, ImagesType
 from ..errors import MissingRequirementsError, NoValidHarFileError
 from ..requests.raise_for_status import raise_for_status
+from ..providers.response import BaseConversation, JsonConversation, RequestLogin, Parameters
 from ..providers.asyncio import get_running_loop
-from .openai.har_file import get_headers, get_har_files
 from ..requests import get_nodriver
 from ..image import ImageResponse, to_bytes, is_accepted_format
 from .. import debug
 
-class Conversation(BaseConversation):
+class Conversation(JsonConversation):
     conversation_id: str
 
     def __init__(self, conversation_id: str):
@@ -47,7 +49,7 @@ class Copilot(AbstractProvider, ProviderModelMixin):
 
     websocket_url = "wss://copilot.microsoft.com/c/api/chat?api-version=2"
     conversation_url = f"{url}/c/api/conversations"
-    
+
     _access_token: str = None
     _cookies: CookieJar = None
 
@@ -59,10 +61,12 @@ class Copilot(AbstractProvider, ProviderModelMixin):
         stream: bool = False,
         proxy: str = None,
         timeout: int = 900,
+        prompt: str = None,
         images: ImagesType = None,
-        conversation: Conversation = None,
+        conversation: BaseConversation = None,
         return_conversation: bool = False,
-        web_search: bool = True,
+        api_key: str = None,
+        web_search: bool = False,
         **kwargs
     ) -> CreateResult:
         if not has_curl_cffi:
@@ -71,17 +75,22 @@ class Copilot(AbstractProvider, ProviderModelMixin):
         websocket_url = cls.websocket_url
         headers = None
         if cls.needs_auth or images is not None:
+            if api_key is not None:
+                cls._access_token = api_key
             if cls._access_token is None:
                 try:
                     cls._access_token, cls._cookies = readHAR(cls.url)
                 except NoValidHarFileError as h:
                     debug.log(f"Copilot: {h}")
-                    try:
+                    if has_nodriver:
+                        login_url = os.environ.get("G4F_LOGIN_URL")
+                        if login_url:
+                            yield RequestLogin(cls.label, login_url)
                         get_running_loop(check_nested=True)
                         cls._access_token, cls._cookies = asyncio.run(get_access_token_and_cookies(cls.url, proxy))
-                    except MissingRequirementsError:
+                    else:
                         raise h
-            debug.log(f"Copilot: Access token: {cls._access_token[:7]}...{cls._access_token[-5:]}")
+            yield Parameters(**{"api_key": cls._access_token, "cookies": cls._cookies if isinstance(cls._cookies, dict) else {c.name: c.value for c in cls._cookies}})
             websocket_url = f"{websocket_url}&accessToken={quote(cls._access_token)}"
             headers = {"authorization": f"Bearer {cls._access_token}"}
 
@@ -94,20 +103,20 @@ class Copilot(AbstractProvider, ProviderModelMixin):
         ) as session:
             if cls._access_token is not None:
                 cls._cookies = session.cookies.jar
-            if cls._access_token is None:
-                try:
-                    url = "https://copilot.microsoft.com/cl/eus-sc/collect"
-                    headers = {
-                        "Accept": "application/x-clarity-gzip",
-                        "referrer": "https://copilot.microsoft.com/onboarding"
-                    }
-                    response = session.post(url, headers=headers, data=get_clarity())
-                    clarity_token = json.loads(response.text.split(" ", maxsplit=1)[-1])[0]["value"]
-                    debug.log(f"Copilot: Clarity Token: ...{clarity_token[-12:]}")
-                except Exception as e:
-                    debug.log(f"Copilot: {e}")
-            else:
-                clarity_token = None
+            # if cls._access_token is None:
+            #     try:
+            #         url = "https://copilot.microsoft.com/cl/eus-sc/collect"
+            #         headers = {
+            #             "Accept": "application/x-clarity-gzip",
+            #             "referrer": "https://copilot.microsoft.com/onboarding"
+            #         }
+            #         response = session.post(url, headers=headers, data=get_clarity())
+            #         clarity_token = json.loads(response.text.split(" ", maxsplit=1)[-1])[0]["value"]
+            #         debug.log(f"Copilot: Clarity Token: ...{clarity_token[-12:]}")
+            #     except Exception as e:
+            #         debug.log(f"Copilot: {e}")
+            # else:
+            #     clarity_token = None
             response = session.get("https://copilot.microsoft.com/c/api/user")
             raise_for_status(response)
             user = response.json().get('firstName')
@@ -118,13 +127,16 @@ class Copilot(AbstractProvider, ProviderModelMixin):
                 response = session.post(cls.conversation_url)
                 raise_for_status(response)
                 conversation_id = response.json().get("id")
+                conversation = Conversation(conversation_id)
                 if return_conversation:
-                    yield Conversation(conversation_id)
-                prompt = format_prompt(messages)
+                    yield conversation
+                if prompt is None:
+                    prompt = format_prompt_max_length(messages, 10000)
                 debug.log(f"Copilot: Created conversation: {conversation_id}")
             else:
                 conversation_id = conversation.conversation_id
-                prompt = messages[-1]["content"]
+                if prompt is None:
+                    prompt = messages[-1]["content"]
                 debug.log(f"Copilot: Use conversation: {conversation_id}")
 
             uploaded_images = []
@@ -138,14 +150,15 @@ class Copilot(AbstractProvider, ProviderModelMixin):
                     )
                     raise_for_status(response)
                     uploaded_images.append({"type":"image", "url": response.json().get("url")})
+                    break
 
             wss = session.ws_connect(cls.websocket_url)
-            if clarity_token is not None:
-                wss.send(json.dumps({
-                    "event": "challengeResponse",
-                    "token": clarity_token,
-                    "method":"clarity"
-                }).encode(), CurlWsFlag.TEXT)
+            # if clarity_token is not None:
+            #     wss.send(json.dumps({
+            #         "event": "challengeResponse",
+            #         "token": clarity_token,
+            #         "method":"clarity"
+            #     }).encode(), CurlWsFlag.TEXT)
             wss.send(json.dumps({
                 "event": "send",
                 "conversationId": conversation_id,
@@ -160,28 +173,34 @@ class Copilot(AbstractProvider, ProviderModelMixin):
             msg = None
             image_prompt: str = None
             last_msg = None
-            while True:
-                try:
-                    msg = wss.recv()[0]
-                    msg = json.loads(msg)
-                except:
-                    break
-                last_msg = msg
-                if msg.get("event") == "appendText":
-                    is_started = True
-                    yield msg.get("text")
-                elif msg.get("event") == "generatingImage":
-                    image_prompt = msg.get("prompt")
-                elif msg.get("event") == "imageGenerated":
-                    yield ImageResponse(msg.get("url"), image_prompt, {"preview": msg.get("thumbnailUrl")})
-                elif msg.get("event") == "done":
-                    break
-                elif msg.get("event") == "error":
-                    raise RuntimeError(f"Error: {msg}")
-                elif msg.get("event") not in ["received", "startMessage", "citation", "partCompleted"]:
-                    debug.log(f"Copilot Message: {msg}")
-            if not is_started:
-                raise RuntimeError(f"Invalid response: {last_msg}")
+            try:
+                while True:
+                    try:
+                        msg = wss.recv()[0]
+                        msg = json.loads(msg)
+                    except:
+                        break
+                    last_msg = msg
+                    if msg.get("event") == "appendText":
+                        is_started = True
+                        yield msg.get("text")
+                    elif msg.get("event") == "generatingImage":
+                        image_prompt = msg.get("prompt")
+                    elif msg.get("event") == "imageGenerated":
+                        yield ImageResponse(msg.get("url"), image_prompt, {"preview": msg.get("thumbnailUrl")})
+                    elif msg.get("event") == "done":
+                        break
+                    elif msg.get("event") == "replaceText":
+                        yield msg.get("text")
+                    elif msg.get("event") == "error":
+                        raise RuntimeError(f"Error: {msg}")
+                    elif msg.get("event") not in ["received", "startMessage", "citation", "partCompleted"]:
+                        debug.log(f"Copilot Message: {msg}")
+                if not is_started:
+                    raise RuntimeError(f"Invalid response: {last_msg}")
+            finally:
+                yield Parameters(**{"conversation": conversation.get_dict(), "user": user, "prompt": prompt})
+                yield Parameters(**{"cookies": {c.name: c.value for c in session.cookies.jar}})
 
 async def get_access_token_and_cookies(url: str, proxy: str = None, target: str = "ChatAI",):
     browser = await get_nodriver(proxy=proxy, user_data_dir="copilot")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from urllib.parse import urlparse
 from typing import Iterator
 from http.cookies import Morsel
@@ -8,7 +9,7 @@ try:
     from .curl_cffi import StreamResponse, StreamSession, FormData
     has_curl_cffi = True
 except ImportError:
-    from typing import Type as Session, Type as Response
+    from typing import Type as Response
     from .aiohttp import StreamResponse, StreamSession, FormData
     has_curl_cffi = False
 try:
@@ -20,6 +21,7 @@ except ImportError:
 try:
     import nodriver
     from nodriver.cdp.network import CookieParam
+    from nodriver.core.config import find_chrome_executable
     from nodriver import Browser
     has_nodriver = True
 except ImportError:
@@ -32,11 +34,14 @@ except ImportError:
 
 from .. import debug
 from .raise_for_status import raise_for_status
-from ..webdriver import WebDriver, WebDriverSession
-from ..webdriver import bypass_cloudflare, get_driver_cookies
 from ..errors import MissingRequirementsError
 from ..typing import Cookies
 from .defaults import DEFAULT_HEADERS, WEBVIEW_HAEDERS
+
+if not has_curl_cffi:
+    class Session:
+        def __init__(self, **kwargs):
+            raise MissingRequirementsError('Install "curl_cffi" package | pip install -U curl_cffi')
 
 async def get_args_from_webview(url: str) -> dict:
     if not has_webview:
@@ -60,69 +65,6 @@ async def get_args_from_webview(url: str) -> dict:
     cookies = {name: cookie.value for name, cookie in cookies}
     window.destroy()
     return {"headers": headers, "cookies": cookies}
-
-def get_args_from_browser(
-    url: str,
-    webdriver: WebDriver = None,
-    proxy: str = None,
-    timeout: int = 120,
-    do_bypass_cloudflare: bool = True,
-    virtual_display: bool = False
-) -> dict:
-    """
-    Create a Session object using a WebDriver to handle cookies and headers.
-
-    Args:
-        url (str): The URL to navigate to using the WebDriver.
-        webdriver (WebDriver, optional): The WebDriver instance to use.
-        proxy (str, optional): Proxy server to use for the Session.
-        timeout (int, optional): Timeout in seconds for the WebDriver.
-
-    Returns:
-        Session: A Session object configured with cookies and headers from the WebDriver.
-    """
-    with WebDriverSession(webdriver, "", proxy=proxy, virtual_display=virtual_display) as driver:
-        if do_bypass_cloudflare:
-            bypass_cloudflare(driver, url, timeout)
-        headers = {
-            **DEFAULT_HEADERS,
-            'referer': url,
-        }
-        if not hasattr(driver, "requests"):
-            headers["user-agent"] = driver.execute_script("return navigator.userAgent")
-        else:
-            for request in driver.requests:
-                if request.url.startswith(url):
-                    for key, value in request.headers.items():
-                        if key in (
-                            "accept-encoding",
-                            "accept-language",
-                            "user-agent",
-                            "sec-ch-ua",
-                            "sec-ch-ua-platform",
-                            "sec-ch-ua-arch",
-                            "sec-ch-ua-full-version",
-                            "sec-ch-ua-platform-version",
-                            "sec-ch-ua-bitness"
-                        ):
-                            headers[key] = value
-                    break
-        cookies = get_driver_cookies(driver)
-    return {
-        'cookies': cookies,
-        'headers': headers,
-    }
-
-def get_session_from_browser(url: str, webdriver: WebDriver = None, proxy: str = None, timeout: int = 120) -> Session:
-    if not has_curl_cffi:
-        raise MissingRequirementsError('Install "curl_cffi" package | pip install -U curl_cffi')
-    args = get_args_from_browser(url, webdriver, proxy, timeout)
-    return Session(
-        **args,
-        proxies={"https": proxy, "http": proxy},
-        timeout=timeout,
-        impersonate="chrome"
-    )
 
 def get_cookie_params_from_dict(cookies: Cookies, url: str = None, domain: str = None) -> list[CookieParam]:
     [CookieParam.from_json({
@@ -151,14 +93,16 @@ async def get_args_from_nodriver(
     else:
         await browser.cookies.set_all(get_cookie_params_from_dict(cookies, url=url, domain=domain))
     page = await browser.get(url)
-    for c in await browser.cookies.get_all():
-        if c.domain.endswith(domain):
-            cookies[c.name] = c.value
+    for c in await page.send(nodriver.cdp.network.get_cookies([url])):
+        cookies[c.name] = c.value
     user_agent = await page.evaluate("window.navigator.userAgent")
     await page.wait_for("body:not(.no-js)", timeout=timeout)
+    for c in await page.send(nodriver.cdp.network.get_cookies([url])):
+        cookies[c.name] = c.value
     await page.close()
     browser.stop()
     return {
+        "impersonate": "chrome",
         "cookies": cookies,
         "headers": {
             **DEFAULT_HEADERS,
@@ -174,13 +118,21 @@ def merge_cookies(cookies: Iterator[Morsel], response: Response) -> Cookies:
     for cookie in response.cookies.jar:
         cookies[cookie.name] = cookie.value
 
-async def get_nodriver(proxy: str = None, user_data_dir = "nodriver", **kwargs)-> Browser:
+async def get_nodriver(proxy: str = None, user_data_dir = "nodriver", browser_executable_path=None, **kwargs)-> Browser:
     if not has_nodriver:
         raise MissingRequirementsError('Install "nodriver" package | pip install -U nodriver')
     user_data_dir = user_config_dir(f"g4f-{user_data_dir}") if has_platformdirs else None
+    if browser_executable_path is None:
+        try:
+            browser_executable_path = find_chrome_executable()
+        except FileNotFoundError:
+            # Default to Edge if Chrome is not found
+            if os.path.exists("C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"):
+                browser_executable_path = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
     debug.log(f"Open nodriver with user_dir: {user_data_dir}")
     return await nodriver.start(
         user_data_dir=user_data_dir,
         browser_args=None if proxy is None else [f"--proxy-server={proxy}"],
+        browser_executable_path=browser_executable_path,
         **kwargs
     )

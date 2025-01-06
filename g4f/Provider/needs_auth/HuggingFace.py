@@ -6,10 +6,12 @@ import random
 import requests
 
 from ...typing import AsyncResult, Messages
-from ..base_provider import AsyncGeneratorProvider, ProviderModelMixin
-from ...errors import ModelNotFoundError, ModelNotSupportedError
+from ..base_provider import AsyncGeneratorProvider, ProviderModelMixin, format_prompt
+from ...errors import ModelNotFoundError, ModelNotSupportedError, ResponseError
 from ...requests import StreamSession, raise_for_status
+from ...providers.response import FinishReason
 from ...image import ImageResponse
+from ... import debug
 
 from .HuggingChat import HuggingChat
 
@@ -28,9 +30,11 @@ class HuggingFace(AsyncGeneratorProvider, ProviderModelMixin):
             cls.models = [model["id"] for model in requests.get(url).json()]
             cls.models.append("meta-llama/Llama-3.2-11B-Vision-Instruct")
             cls.models.append("nvidia/Llama-3.1-Nemotron-70B-Instruct-HF")
+            cls.models.sort()
         if not cls.image_models:
             url = "https://huggingface.co/api/models?pipeline_tag=text-to-image"
             cls.image_models = [model["id"] for model in requests.get(url).json() if model["trendingScore"] >= 20]
+            cls.image_models.sort()
             cls.models.extend(cls.image_models)
         return cls.models
 
@@ -43,9 +47,11 @@ class HuggingFace(AsyncGeneratorProvider, ProviderModelMixin):
         proxy: str = None,
         api_base: str = "https://api-inference.huggingface.co",
         api_key: str = None,
-        max_new_tokens: int = 1024,
-        temperature: float = 0.7,
+        max_tokens: int = 1024,
+        temperature: float = None,
         prompt: str = None,
+        action: str = None,
+        extra_data: dict = {},
         **kwargs
     ) -> AsyncResult:
         try:
@@ -71,17 +77,18 @@ class HuggingFace(AsyncGeneratorProvider, ProviderModelMixin):
         if api_key is not None:
             headers["Authorization"] = f"Bearer {api_key}"
         payload = None
-        if model in cls.image_models:
+        if cls.get_models() and model in cls.image_models:
             stream = False
             prompt = messages[-1]["content"] if prompt is None else prompt
-            payload = {"inputs": prompt, "parameters": {"seed": random.randint(0, 2**32)}}
+            payload = {"inputs": prompt, "parameters": {"seed": random.randint(0, 2**32), **extra_data}}
         else:
             params = {
                 "return_full_text": False,
-                "max_new_tokens": max_new_tokens,
+                "max_new_tokens": max_tokens,
                 "temperature": temperature,
-                **kwargs
+                **extra_data
             }
+            do_continue = action == "continue"
         async with StreamSession(
             headers=headers,
             proxy=proxy,
@@ -89,19 +96,23 @@ class HuggingFace(AsyncGeneratorProvider, ProviderModelMixin):
         ) as session:
             if payload is None:
                 async with session.get(f"https://huggingface.co/api/models/{model}") as response:
+                    await raise_for_status(response)
                     model_data = await response.json()
-                    if "config" in model_data and "tokenizer_config" in model_data["config"] and "eos_token" in model_data["config"]["tokenizer_config"]:
-                        eos_token = model_data["config"]["tokenizer_config"]["eos_token"]
-                        if eos_token == "</s>":
-                            inputs = format_prompt_mistral(messages)
-                        elif eos_token == "<|im_end|>":
-                            inputs = format_prompt_qwen(messages)
-                        elif eos_token == "<|eot_id|>":
-                            inputs = format_prompt_llama(messages)
+                    model_type = None
+                    if "config" in model_data and "model_type" in model_data["config"]:
+                        model_type = model_data["config"]["model_type"]
+                    debug.log(f"Model type: {model_type}")
+                    inputs = get_inputs(messages, model_data, model_type, do_continue)
+                    debug.log(f"Inputs len: {len(inputs)}")
+                    if len(inputs) > 4096:
+                        if len(messages) > 6:
+                            messages = messages[:3] + messages[-3:]
                         else:
-                            inputs = format_prompt(messages)
-                    else:
-                        inputs = format_prompt(messages)
+                            messages = [m for m in messages if m["role"] == "system"] + [messages[-1]]
+                        inputs = get_inputs(messages, model_data, model_type, do_continue)
+                        debug.log(f"New len: {len(inputs)}")
+                    if model_type == "gpt2" and max_tokens >= 1024:
+                        params["max_new_tokens"] = 512
                 payload = {"inputs": inputs, "parameters": params, "stream": stream}
 
             async with session.post(f"{api_base.rstrip('/')}/models/{model}", json=payload) as response:
@@ -110,16 +121,23 @@ class HuggingFace(AsyncGeneratorProvider, ProviderModelMixin):
                 await raise_for_status(response)
                 if stream:
                     first = True
+                    is_special = False
                     async for line in response.iter_lines():
                         if line.startswith(b"data:"):
                             data = json.loads(line[5:])
+                            if "error" in data:
+                                raise ResponseError(data["error"])
                             if not data["token"]["special"]:
                                 chunk = data["token"]["text"]
-                                if first:
+                                if first and not do_continue:
                                     first = False
                                     chunk = chunk.lstrip()
                                 if chunk:
                                     yield chunk
+                            else:
+                                is_special = True
+                    debug.log(f"Special token: {is_special}")
+                    yield FinishReason("stop" if is_special else "length", actions=["variant"] if is_special else ["continue", "variant"])
                 else:
                     if response.headers["content-type"].startswith("image/"):
                         base64_data = base64.b64encode(b"".join([chunk async for chunk in response.iter_content()]))
@@ -128,7 +146,7 @@ class HuggingFace(AsyncGeneratorProvider, ProviderModelMixin):
                     else:
                         yield (await response.json())[0]["generated_text"].strip()
 
-def format_prompt(messages: Messages) -> str:
+def format_prompt_mistral(messages: Messages, do_continue: bool = False) -> str:
     system_messages = [message["content"] for message in messages if message["role"] == "system"]
     question = " ".join([messages[-1]["content"], *system_messages])
     history = "".join([
@@ -136,19 +154,49 @@ def format_prompt(messages: Messages) -> str:
         for idx, message in enumerate(messages)
         if message["role"] == "assistant"
     ])
+    if do_continue:
+        return history[:-len('</s>')]
     return f"{history}<s>[INST] {question} [/INST]"
 
-def format_prompt_qwen(messages: Messages) -> str:
-    return "".join([
+def format_prompt_qwen(messages: Messages, do_continue: bool = False) -> str:
+    prompt = "".join([
         f"<|im_start|>{message['role']}\n{message['content']}\n<|im_end|>\n" for message in messages
-    ]) + "<|im_start|>assistant\n"
+    ]) + ("" if do_continue else "<|im_start|>assistant\n")
+    if do_continue:
+        return prompt[:-len("\n<|im_end|>\n")]
+    return prompt
 
-def format_prompt_llama(messages: Messages) -> str:
-    return "<|begin_of_text|>" + "".join([
+def format_prompt_llama(messages: Messages, do_continue: bool = False) -> str:
+    prompt = "<|begin_of_text|>" + "".join([
         f"<|start_header_id|>{message['role']}<|end_header_id|>\n\n{message['content']}\n<|eot_id|>\n" for message in messages
-    ]) + "<|start_header_id|>assistant<|end_header_id|>\\n\\n"
-    
-def format_prompt_mistral(messages: Messages) -> str:
-    return "".join([
-        f"<|{message['role']}|>\n{message['content']}'</s>\n" for message in messages
-    ]) + "<|assistant|>\n"
+    ]) + ("" if do_continue else "<|start_header_id|>assistant<|end_header_id|>\n\n")
+    if do_continue:
+        return prompt[:-len("\n<|eot_id|>\n")]
+    return prompt
+
+def format_prompt_custom(messages: Messages, end_token: str = "</s>", do_continue: bool = False) -> str:
+    prompt = "".join([
+        f"<|{message['role']}|>\n{message['content']}{end_token}\n" for message in messages
+    ]) + ("" if do_continue else "<|assistant|>\n")
+    if do_continue:
+        return prompt[:-len(end_token + "\n")]
+    return prompt
+
+def get_inputs(messages: Messages, model_data: dict, model_type: str, do_continue: bool = False) -> str:
+    if model_type in ("gpt2", "gpt_neo", "gemma", "gemma2"):
+        inputs = format_prompt(messages, do_continue=do_continue)
+    elif model_type in ("mistral"):
+        inputs = format_prompt_mistral(messages, do_continue)
+    elif "config" in model_data and "tokenizer_config" in model_data["config"] and "eos_token" in model_data["config"]["tokenizer_config"]:
+        eos_token = model_data["config"]["tokenizer_config"]["eos_token"]
+        if eos_token in ("<|endoftext|>", "<eos>", "</s>"):
+            inputs = format_prompt_custom(messages, eos_token, do_continue)
+        elif eos_token == "<|im_end|>":
+            inputs = format_prompt_qwen(messages, do_continue)
+        elif eos_token == "<|eot_id|>":
+            inputs = format_prompt_llama(messages, do_continue)
+        else:
+            inputs = format_prompt(messages, do_continue=do_continue)
+    else:
+        inputs = format_prompt(messages, do_continue=do_continue)
+    return inputs

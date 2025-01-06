@@ -6,7 +6,7 @@ import uvicorn
 import secrets
 import os
 import shutil
-
+from email.utils import formatdate
 import os.path
 from fastapi import FastAPI, Response, Request, UploadFile, Depends
 from fastapi.middleware.wsgi import WSGIMiddleware
@@ -22,29 +22,32 @@ from starlette.status import (
     HTTP_403_FORBIDDEN,
     HTTP_500_INTERNAL_SERVER_ERROR,
 )
+from starlette.staticfiles import NotModifiedResponse
 from fastapi.encoders import jsonable_encoder
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, HTTPBasic
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import FileResponse
-from pydantic import BaseModel, Field
+from starlette._compat import md5_hexdigest
+from types import SimpleNamespace
 from typing import Union, Optional, List
-try:
-    from typing import Annotated
-except ImportError:
-    class Annotated:
-        pass
 
 import g4f
 import g4f.debug
 from g4f.client import AsyncClient, ChatCompletion, ImagesResponse, convert_to_provider
-from g4f.providers.response import BaseConversation
+from g4f.providers.response import BaseConversation, JsonConversation
 from g4f.client.helper import filter_none
-from g4f.image import is_accepted_format, is_data_uri_an_image, images_dir
-from g4f.typing import Messages
-from g4f.errors import ProviderNotFoundError, ModelNotFoundError, MissingAuthError
+from g4f.image import is_data_uri_an_image, images_dir
+from g4f.errors import ProviderNotFoundError, ModelNotFoundError, MissingAuthError, NoValidHarFileError
 from g4f.cookies import read_cookie_files, get_cookies_dir
 from g4f.Provider import ProviderType, ProviderUtils, __providers__
 from g4f.gui import get_gui_app
+from g4f.tools.files import supports_filename, get_async_streaming
+from .stubs import (
+    ChatCompletionsConfig, ImageGenerationConfig,
+    ProviderResponseModel, ModelResponseModel,
+    ErrorResponseModel, ProviderResponseDetailModel,
+    FileResponseModel, UploadResponseModel, Annotated
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,18 +67,10 @@ def create_app():
 
     api = Api(app)
 
-    if AppConfig.gui:
-        @app.get("/")
-        async def home():
-            return HTMLResponse(f'g4f v-{g4f.version.utils.current_version}:<br><br>'
-                                'Start to chat: <a href="/chat/">/chat/</a><br>'
-                                'Open Swagger UI at: '
-                                '<a href="/docs">/docs</a>')
-
     api.register_routes()
     api.register_authorization()
     api.register_validation_exception_handler()
-
+ 
     if AppConfig.gui:
         gui_app = WSGIMiddleware(get_gui_app())
         app.mount("/", gui_app)
@@ -83,6 +78,11 @@ def create_app():
     # Read cookie files if not ignored
     if not AppConfig.ignore_cookie_files:
         read_cookie_files()
+
+    if AppConfig.ignored_providers:
+        for provider in AppConfig.ignored_providers:
+            if provider in ProviderUtils.convert:
+                ProviderUtils.convert[provider].working = False
 
     return app
 
@@ -95,63 +95,6 @@ def create_app_with_gui_and_debug():
     AppConfig.gui = True
     return create_app()
 
-class ChatCompletionsConfig(BaseModel):
-    messages: Messages = Field(examples=[[{"role": "system", "content": ""}, {"role": "user", "content": ""}]])
-    model: str = Field(default="")
-    provider: Optional[str] = None
-    stream: bool = False
-    image: Optional[str] = None
-    image_name: Optional[str] = None
-    images: Optional[list[tuple[str, str]]] = None
-    temperature: Optional[float] = None
-    max_tokens: Optional[int] = None
-    stop: Union[list[str], str, None] = None
-    api_key: Optional[str] = None
-    web_search: Optional[bool] = None
-    proxy: Optional[str] = None
-    conversation_id: Optional[str] = None
-    history_disabled: Optional[bool] = None
-    auto_continue: Optional[bool] = None
-    timeout: Optional[int] = None
-
-class ImageGenerationConfig(BaseModel):
-    prompt: str
-    model: Optional[str] = None
-    provider: Optional[str] = None
-    response_format: Optional[str] = None
-    api_key: Optional[str] = None
-    proxy: Optional[str] = None
-
-class ProviderResponseModel(BaseModel):
-    id: str
-    object: str = "provider"
-    created: int
-    url: Optional[str]
-    label: Optional[str]
-
-class ProviderResponseDetailModel(ProviderResponseModel):
-    models: list[str]
-    image_models: list[str]
-    vision_models: list[str]
-    params: list[str]
-
-class ModelResponseModel(BaseModel):
-    id: str
-    object: str = "model"
-    created: int
-    owned_by: Optional[str]
-
-class ErrorResponseModel(BaseModel):
-    error: ErrorResponseMessageModel
-    model: Optional[str] = None
-    provider: Optional[str] = None
-
-class ErrorResponseMessageModel(BaseModel):
-    message: str
-
-class FileResponseModel(BaseModel):
-    filename: str
-    
 class ErrorResponse(Response):
     media_type = "application/json"
 
@@ -183,12 +126,6 @@ class AppConfig:
         for key, value in data.items():
             setattr(cls, key, value)
 
-list_ignored_providers: list[str] = None
-
-def set_list_ignored_providers(ignored: list[str]):
-    global list_ignored_providers
-    list_ignored_providers = ignored
-
 class Api:
     def __init__(self, app: FastAPI) -> None:
         self.app = app
@@ -199,7 +136,7 @@ class Api:
     security = HTTPBearer(auto_error=False)
     basic_security = HTTPBasic()
 
-    async def get_username(self, request: Request):
+    async def get_username(self, request: Request) -> str:
         credentials = await self.basic_security(request)
         current_password_bytes = credentials.password.encode()
         is_correct_password = secrets.compare_digest(
@@ -223,13 +160,13 @@ class Api:
                     user_g4f_api_key = await self.get_g4f_api_key(request)
                 except HTTPException:
                     user_g4f_api_key = None
-                if request.url.path.startswith("/v1"):
+                path = request.url.path
+                if path.startswith("/v1"):
                     if user_g4f_api_key is None:
                         return ErrorResponse.from_message("G4F API key required", HTTP_401_UNAUTHORIZED)
                     if not secrets.compare_digest(AppConfig.g4f_api_key, user_g4f_api_key):
                         return ErrorResponse.from_message("Invalid G4F API key", HTTP_403_FORBIDDEN)
                 else:
-                    path = request.url.path
                     if user_g4f_api_key is not None and path.startswith("/images/"):
                         if not secrets.compare_digest(AppConfig.g4f_api_key, user_g4f_api_key):
                             return ErrorResponse.from_message("Invalid G4F API key", HTTP_403_FORBIDDEN)
@@ -260,9 +197,10 @@ class Api:
             )
 
     def register_routes(self):
-        @self.app.get("/")
-        async def read_root():
-            return RedirectResponse("/v1", 302)
+        if not AppConfig.gui:
+            @self.app.get("/")
+            async def read_root():
+                return RedirectResponse("/v1", 302)
 
         @self.app.get("/v1")
         async def read_root_v1():
@@ -319,7 +257,10 @@ class Api:
                     config.api_key = credentials.credentials
 
                 conversation = return_conversation = None
-                if config.conversation_id is not None and config.provider is not None:
+                if conversation is not None:
+                    conversation = JsonConversation(**conversation)
+                    return_conversation = True
+                elif config.conversation_id is not None and config.provider is not None:
                     return_conversation = True
                     if config.conversation_id in self.conversations:
                         if config.provider in self.conversations[config.conversation_id]:
@@ -337,6 +278,7 @@ class Api:
                         except ValueError as e:
                             example = json.dumps({"images": [["data:image/jpeg;base64,...", "filename"]]})
                             return ErrorResponse.from_message(f'The image you send must be a data URI. Example: {example}', status_code=HTTP_422_UNPROCESSABLE_ENTITY)
+
                 # Create the completion response
                 response = self.client.chat.completions.create(
                     **filter_none(
@@ -380,7 +322,7 @@ class Api:
             except (ModelNotFoundError, ProviderNotFoundError) as e:
                 logger.exception(e)
                 return ErrorResponse.from_exception(e, config, HTTP_404_NOT_FOUND)
-            except MissingAuthError as e:
+            except (MissingAuthError, NoValidHarFileError) as e:
                 logger.exception(e)
                 return ErrorResponse.from_exception(e, config, HTTP_401_UNAUTHORIZED)
             except Exception as e:
@@ -393,7 +335,6 @@ class Api:
             HTTP_404_NOT_FOUND: {"model": ErrorResponseModel},
             HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponseModel},
         }
-
         @self.app.post("/v1/images/generate", responses=responses)
         @self.app.post("/v1/images/generations", responses=responses)
         async def generate_image(
@@ -483,6 +424,41 @@ class Api:
                 read_cookie_files()
             return response_data
 
+        @self.app.get("/v1/files/{bucket_id}", responses={
+            HTTP_200_OK: {"content": {
+                "text/event-stream": {"schema": {"type": "string"}},
+                "text/plain": {"schema": {"type": "string"}},
+            }},
+            HTTP_404_NOT_FOUND: {"model": ErrorResponseModel},
+        })
+        def read_files(request: Request, bucket_id: str, delete_files: bool = True, refine_chunks_with_spacy: bool = False):
+            bucket_dir = os.path.join(get_cookies_dir(), bucket_id)
+            event_stream = "text/event-stream" in request.headers.get("accept", "")
+            if not os.path.isdir(bucket_dir):
+                return ErrorResponse.from_message("Bucket dir not found", 404)
+            return StreamingResponse(get_async_streaming(bucket_dir, delete_files, refine_chunks_with_spacy, event_stream),
+                                     media_type="text/event-stream" if event_stream else "text/plain")
+
+        @self.app.post("/v1/files/{bucket_id}", responses={
+            HTTP_200_OK: {"model": UploadResponseModel}
+        })
+        def upload_files(bucket_id: str, files: List[UploadFile]):
+            bucket_dir = os.path.join(get_cookies_dir(), bucket_id)
+            os.makedirs(bucket_dir, exist_ok=True)
+            filenames = []
+            for file in files:
+                try:
+                    filename = os.path.basename(file.filename)
+                    if file and supports_filename(filename):
+                        with open(os.path.join(bucket_dir, filename), 'wb') as f:
+                            shutil.copyfileobj(file.file, f)
+                        filenames.append(filename)
+                finally:
+                    file.file.close()
+            with open(os.path.join(bucket_dir, "files.txt"), 'w') as f:
+                [f.write(f"{filename}\n") for filename in filenames]
+            return {"bucket_id": bucket_id, "url": f"/v1/files/{bucket_id}", "files": filenames}
+
         @self.app.get("/v1/synthesize/{provider}", responses={
             HTTP_200_OK: {"content": {"audio/*": {}}},
             HTTP_404_NOT_FOUND: {"model": ErrorResponseModel},
@@ -505,16 +481,33 @@ class Api:
             HTTP_200_OK: {"content": {"image/*": {}}},
             HTTP_404_NOT_FOUND: {}
         })
-        async def get_image(filename):
+        async def get_image(filename, request: Request):
             target = os.path.join(images_dir, filename)
-
+            ext = os.path.splitext(filename)[1]
+            stat_result = SimpleNamespace()
+            stat_result.st_size = 0
+            if os.path.isfile(target):
+                stat_result.st_size = os.stat(target).st_size
+            stat_result.st_mtime = int(f"{filename.split('_')[0]}")
+            response = FileResponse(
+                target,
+                media_type=f"image/{ext.replace('jpg', 'jepg')}",
+                headers={
+                    "content-length": str(stat_result.st_size),
+                    "last-modified": formatdate(stat_result.st_mtime, usegmt=True),
+                    "etag": f'"{md5_hexdigest(filename.encode(), usedforsecurity=False)}"'
+                },
+            )
+            try:
+                if_none_match = request.headers["if-none-match"]
+                etag = response.headers["etag"]
+                if etag in [tag.strip(" W/") for tag in if_none_match.split(",")]:
+                    return NotModifiedResponse(response.headers)
+            except KeyError:
+                pass
             if not os.path.isfile(target):
-                return Response(status_code=404)
-
-            with open(target, "rb") as f:
-                content_type = is_accepted_format(f.read(12))
-
-            return FileResponse(target, media_type=content_type)
+                return Response(status_code=HTTP_404_NOT_FOUND)
+            return response
 
 def format_exception(e: Union[Exception, str], config: Union[ChatCompletionsConfig, ImageGenerationConfig] = None, image: bool = False) -> str:
     last_provider = {} if not image else g4f.get_last_provider(True)

@@ -8,6 +8,7 @@ from .DeepInfraImage    import DeepInfraImage
 from .Gemini            import Gemini
 from .GeminiPro         import GeminiPro
 from .GithubCopilot     import GithubCopilot
+from .GlhfChat          import GlhfChat
 from .Groq              import Groq
 from .HuggingChat       import HuggingChat
 from .HuggingFace       import HuggingFace
@@ -26,3 +27,4 @@ from .Replicate         import Replicate
 from .Theb              import Theb
 from .ThebApi           import ThebApi
 from .WhiteRabbitNeo    import WhiteRabbitNeo
+from .xAI               import xAI

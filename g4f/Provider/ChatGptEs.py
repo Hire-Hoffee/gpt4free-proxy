@@ -54,10 +54,8 @@ class ChatGptEs(AsyncGeneratorProvider, ProviderModelMixin):
             post_id = re.findall(r'data-post-id="(.+?)"', await initial_response.text())[0]
 
             formatted_prompt = format_prompt(messages)
-            
-            conversation_history = [
-                "Human: You are a helpful AI assistant. Please respond in the same language that the user uses in their message. Provide accurate, relevant and helpful information while maintaining a friendly and professional tone. If you're not sure about something, please acknowledge that and provide the best information you can while noting any uncertainties. Focus on being helpful while respecting the user's choice of language."
-            ]
+                      
+            conversation_history = []
 
             for message in messages[:-1]:
                 if message['role'] == "user":
@@ -66,6 +64,7 @@ class ChatGptEs(AsyncGeneratorProvider, ProviderModelMixin):
                     conversation_history.append(f"AI: {message['content']}")
 
             payload = {
+                'wpaicg_user_agree': '1',
                 '_wpnonce': nonce_,
                 'post_id': post_id,
                 'url': cls.url,
@@ -80,4 +79,6 @@ class ChatGptEs(AsyncGeneratorProvider, ProviderModelMixin):
             async with session.post(cls.api_endpoint, headers=headers, data=payload) as response:
                 response.raise_for_status()
                 result = await response.json()
+                if "Du musst das Kästchen anklicken!" in result['data']:
+                    raise ValueError(result['data'])
                 yield result['data']
