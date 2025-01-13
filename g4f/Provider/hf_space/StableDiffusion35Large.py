@@ -8,35 +8,33 @@ from ...image import ImageResponse, ImagePreview
 from ...errors import ResponseError
 from ..base_provider import AsyncGeneratorProvider, ProviderModelMixin
 
-class BlackForestLabsFlux1Dev(AsyncGeneratorProvider, ProviderModelMixin):
-    url = "https://black-forest-labs-flux-1-dev.hf.space"
+class StableDiffusion35Large(AsyncGeneratorProvider, ProviderModelMixin):
+    url = "https://stabilityai-stable-diffusion-3-5-large.hf.space"
     api_endpoint = "/gradio_api/call/infer"
 
     working = True
 
-    default_model = 'black-forest-labs-flux-1-dev'
+    default_model = 'stabilityai-stable-diffusion-3-5-large'
     default_image_model = default_model
-    image_models = [default_image_model]
+    image_models = [default_model]
     models = image_models
-    model_aliases = {"flux-dev": default_model}
+    model_aliases = {"sd-3.5": default_model}
 
     @classmethod
     async def create_async_generator(
-        cls, 
-        model: str, 
-        messages: Messages,
+        cls, model: str, messages: Messages,
         prompt: str = None,
+        negative_prompt: str = None,
         api_key: str = None, 
         proxy: str = None,
         width: int = 1024,
         height: int = 1024,
-        guidance_scale: float = 3.5,
-        num_inference_steps: int = 28,
+        guidance_scale: float = 4.5,
+        num_inference_steps: int = 50,
         seed: int = 0,
         randomize_seed: bool = True,
         **kwargs
     ) -> AsyncResult:
-        model = cls.get_model(model)
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
@@ -46,7 +44,7 @@ class BlackForestLabsFlux1Dev(AsyncGeneratorProvider, ProviderModelMixin):
         async with ClientSession(headers=headers) as session:
             prompt = messages[-1]["content"] if prompt is None else prompt
             data = {
-                "data": [prompt, seed, randomize_seed, width, height, guidance_scale, num_inference_steps]
+                "data": [prompt, negative_prompt, seed, randomize_seed, width, height, guidance_scale, num_inference_steps]
             }
             async with session.post(f"{cls.url}{cls.api_endpoint}", json=data, proxy=proxy) as response:
                 response.raise_for_status()

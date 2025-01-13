@@ -17,6 +17,7 @@ from .HuggingChat import HuggingChat
 
 class HuggingFace(AsyncGeneratorProvider, ProviderModelMixin):
     url = "https://huggingface.co"
+    login_url = "https://huggingface.co/settings/tokens"
     working = True
     supports_message_history = True
     default_model = HuggingChat.default_model
@@ -27,15 +28,16 @@ class HuggingFace(AsyncGeneratorProvider, ProviderModelMixin):
     def get_models(cls) -> list[str]:
         if not cls.models:
             url = "https://huggingface.co/api/models?inference=warm&pipeline_tag=text-generation"
-            cls.models = [model["id"] for model in requests.get(url).json()]
-            cls.models.append("meta-llama/Llama-3.2-11B-Vision-Instruct")
-            cls.models.append("nvidia/Llama-3.1-Nemotron-70B-Instruct-HF")
-            cls.models.sort()
-        if not cls.image_models:
-            url = "https://huggingface.co/api/models?pipeline_tag=text-to-image"
-            cls.image_models = [model["id"] for model in requests.get(url).json() if model["trendingScore"] >= 20]
-            cls.image_models.sort()
-            cls.models.extend(cls.image_models)
+            models = [model["id"] for model in requests.get(url).json()]
+            models.append("meta-llama/Llama-3.2-11B-Vision-Instruct")
+            models.append("nvidia/Llama-3.1-Nemotron-70B-Instruct-HF")
+            models.sort()
+            if not cls.image_models:
+                url = "https://huggingface.co/api/models?pipeline_tag=text-to-image"
+                cls.image_models = [model["id"] for model in requests.get(url).json() if model["trendingScore"] >= 20]
+                cls.image_models.sort()
+                models.extend(cls.image_models)
+            cls.models = models
         return cls.models
 
     @classmethod
@@ -149,14 +151,14 @@ class HuggingFace(AsyncGeneratorProvider, ProviderModelMixin):
 def format_prompt_mistral(messages: Messages, do_continue: bool = False) -> str:
     system_messages = [message["content"] for message in messages if message["role"] == "system"]
     question = " ".join([messages[-1]["content"], *system_messages])
-    history = "".join([
+    history = "\n".join([
         f"<s>[INST]{messages[idx-1]['content']} [/INST] {message['content']}</s>"
         for idx, message in enumerate(messages)
         if message["role"] == "assistant"
     ])
     if do_continue:
         return history[:-len('</s>')]
-    return f"{history}<s>[INST] {question} [/INST]"
+    return f"{history}\n<s>[INST] {question} [/INST]"
 
 def format_prompt_qwen(messages: Messages, do_continue: bool = False) -> str:
     prompt = "".join([
@@ -185,7 +187,7 @@ def format_prompt_custom(messages: Messages, end_token: str = "</s>", do_continu
 def get_inputs(messages: Messages, model_data: dict, model_type: str, do_continue: bool = False) -> str:
     if model_type in ("gpt2", "gpt_neo", "gemma", "gemma2"):
         inputs = format_prompt(messages, do_continue=do_continue)
-    elif model_type in ("mistral"):
+    elif model_type == "mistral" and model_data.get("author")  == "mistralai":
         inputs = format_prompt_mistral(messages, do_continue)
     elif "config" in model_data and "tokenizer_config" in model_data["config"] and "eos_token" in model_data["config"]["tokenizer_config"]:
         eos_token = model_data["config"]["tokenizer_config"]["eos_token"]

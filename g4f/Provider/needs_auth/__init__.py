@@ -3,8 +3,10 @@ from .gigachat          import *
 from .BingCreateImages  import BingCreateImages
 from .Cerebras          import Cerebras
 from .CopilotAccount    import CopilotAccount
+from .Custom            import Custom
 from .DeepInfra         import DeepInfra
 from .DeepInfraImage    import DeepInfraImage
+from .DeepSeek          import DeepSeek
 from .Gemini            import Gemini
 from .GeminiPro         import GeminiPro
 from .GithubCopilot     import GithubCopilot
@@ -24,7 +26,6 @@ from .Poe               import Poe
 from .Raycast           import Raycast
 from .Reka              import Reka
 from .Replicate         import Replicate
-from .Theb              import Theb
 from .ThebApi           import ThebApi
 from .WhiteRabbitNeo    import WhiteRabbitNeo
 from .xAI               import xAI

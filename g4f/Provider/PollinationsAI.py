@@ -7,45 +7,48 @@ from urllib.parse import quote
 from typing import Optional
 from aiohttp import ClientSession
 
+from .base_provider import AsyncGeneratorProvider, ProviderModelMixin
 from ..requests.raise_for_status import raise_for_status
 from ..typing import AsyncResult, Messages
 from ..image import ImageResponse
-from .needs_auth.OpenaiAPI import OpenaiAPI
 
-class PollinationsAI(OpenaiAPI):
+class PollinationsAI(AsyncGeneratorProvider, ProviderModelMixin):
     label = "Pollinations AI"
     url = "https://pollinations.ai"
     
     working = True
-    needs_auth = True
-    supports_stream = True
+    supports_stream = False
     supports_system_message = True
     supports_message_history = True
-    
+
     # API endpoints base
     api_base = "https://text.pollinations.ai/openai"
-    
+
     # API endpoints
-    text_api_endpoint = "https://text.pollinations.ai"
-    image_api_endpoint = "https://image.pollinations.ai"
-    
+    text_api_endpoint = "https://text.pollinations.ai/"
+    image_api_endpoint = "https://image.pollinations.ai/"
+
     # Models configuration
     default_model = "openai"
     default_image_model = "flux"
-    
+
     image_models = []
     models = []
-    
+
     additional_models_image = ["midjourney", "dall-e-3"]
-    additional_models_text = ["sur", "sur-mistral", "claude"]
+    additional_models_text = ["claude", "karma", "command-r", "llamalight", "mistral-large", "sur", "sur-mistral"]
     model_aliases = {
-        "gpt-4o": "openai",
+        "gpt-4o": default_model,
+        "qwen-2-72b": "qwen",
+        "qwen-2.5-coder-32b": "qwen-coder",
+        "llama-3.3-70b": "llama",
         "mistral-nemo": "mistral",
-        "llama-3.1-70b": "llama",
+        #"": "karma",
         "gpt-4": "searchgpt",
         "gpt-4": "claude",
-        "qwen-2.5-coder-32b": "qwen-coder",
         "claude-3.5-sonnet": "sur",
+        "deepseek-chat": "deepseek",
+        "llama-3.2-3b": "llamalight", 
     }
 
     @classmethod
@@ -91,16 +94,15 @@ class PollinationsAI(OpenaiAPI):
         enhance: bool = False,
         safe: bool = False,
         # Text specific parameters
-        api_key: str = None,
         temperature: float = 0.5,
         presence_penalty: float = 0,
         top_p: float = 1,
         frequency_penalty: float = 0,
-        stream: bool = True,
+        stream: bool = False,
         **kwargs
     ) -> AsyncResult:
         model = cls.get_model(model)
-        
+
         # Check if models
         # Image generation
         if model in cls.image_models:
@@ -124,7 +126,6 @@ class PollinationsAI(OpenaiAPI):
                 model=model,
                 messages=messages,
                 proxy=proxy,
-                api_key=api_key,
                 temperature=temperature,
                 presence_penalty=presence_penalty,
                 top_p=top_p,
@@ -151,7 +152,6 @@ class PollinationsAI(OpenaiAPI):
         if seed is None:
             seed = random.randint(0, 10000)
 
-		
         headers = {
             'Accept': '*/*',
             'Accept-Language': 'en-US,en;q=0.9',
@@ -171,13 +171,13 @@ class PollinationsAI(OpenaiAPI):
         params = {k: v for k, v in params.items() if v is not None}
 
         async with ClientSession(headers=headers) as session:
-            prompt = quote(messages[-1]["content"] if prompt is None else prompt)
+            prompt = messages[-1]["content"] if prompt is None else prompt
             param_string = "&".join(f"{k}={v}" for k, v in params.items())
-            url = f"{cls.image_api_endpoint}/prompt/{prompt}?{param_string}"
+            url = f"{cls.image_api_endpoint}/prompt/{quote(prompt)}?{param_string}"
 
             async with session.head(url, proxy=proxy) as response:
                 if response.status == 200:
-                    image_response = ImageResponse(images=url, alt=messages[-1]["content"])
+                    image_response = ImageResponse(images=url, alt=prompt)
                     yield image_response
 
     @classmethod
@@ -186,24 +186,23 @@ class PollinationsAI(OpenaiAPI):
         model: str,
         messages: Messages,
         proxy: str,
-        api_key: str,
         temperature: float,
         presence_penalty: float,
         top_p: float,
         frequency_penalty: float,
-        stream: bool
-    ) -> AsyncResult:
-        if api_key is None:
-            api_key = "dummy"  # Default value if api_key is not provided
-            
+        stream: bool,
+        seed: Optional[int] = None
+    ) -> AsyncResult:       
         headers = {
             "accept": "*/*",
             "accept-language": "en-US,en;q=0.9",
-            "authorization": f"Bearer {api_key}",
             "content-type": "application/json",
             "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
         }
-
+        
+        if seed is None:
+            seed = random.randint(0, 10000)
+			
         async with ClientSession(headers=headers) as session:
             data = {
                 "messages": messages,
@@ -213,17 +212,41 @@ class PollinationsAI(OpenaiAPI):
                 "top_p": top_p,
                 "frequency_penalty": frequency_penalty,
                 "jsonMode": False,
-                "stream": stream
+                "stream": stream,
+                "seed": seed,
+                "cache": False
             }
-            
+
             async with session.post(cls.text_api_endpoint, json=data, proxy=proxy) as response:
                 response.raise_for_status()
                 async for chunk in response.content:
                     if chunk:
                         decoded_chunk = chunk.decode()
+                        
+                        # Skip [DONE].
+                        if "data: [DONE]" in decoded_chunk:
+                            continue
+                            
+                        # Processing plain text
+                        if not decoded_chunk.startswith("data:"):
+                            clean_text = decoded_chunk.strip()
+                            if clean_text:
+                                yield clean_text
+                            continue
+                        
+                        # Processing JSON format
                         try:
-                            json_response = json.loads(decoded_chunk)
-                            content = json_response['choices'][0]['message']['content']
-                            yield content
+                            # Remove the prefix “data: “ and parse JSON
+                            json_str = decoded_chunk.replace("data:", "").strip()
+                            json_response = json.loads(json_str)
+                            
+                            if "choices" in json_response and json_response["choices"]:
+                                if "delta" in json_response["choices"][0]:
+                                    content = json_response["choices"][0]["delta"].get("content")
+                                    if content:
+                                        # Remove escaped slashes before parentheses
+                                        clean_content = content.replace("\\(", "(").replace("\\)", ")")
+                                        yield clean_content
                         except json.JSONDecodeError:
-                            yield decoded_chunk
+                            # If JSON could not be parsed, skip
+                            continue

@@ -36,6 +36,7 @@
         import llamaTokenizer from "llama-tokenizer-js"
     </script>
     <script src="https://cdn.jsdelivr.net/npm/gpt-tokenizer/dist/cl100k_base.js" async></script>
+    <script src="https://cdn.jsdelivr.net/npm/gpt-tokenizer/dist/o200k_base.js" async></script>
     <script type="module" async>
         import PhotoSwipeLightbox from 'https://cdn.jsdelivr.net/npm/photoswipe/dist/photoswipe-lightbox.esm.js';
         const lightbox = new PhotoSwipeLightbox({
@@ -138,8 +139,12 @@
             </div>
             <div class="field">
                 <span class="label">Refine files with spaCy</span>
-                <input type="checkbox" id="refine" checked/>
+                <input type="checkbox" id="refine"/>
                 <label for="refine" class="toogle" title=""></label>
+            </div>
+            <div class="field box">
+                <label for="systemPrompt" class="label" title="">Default for System prompt</label>
+                <textarea id="systemPrompt" placeholder="You are a helpful assistant."></textarea>
             </div>
             <div class="field box">
                 <label for="message-input-height" class="label" title="">Input max. height</label>
@@ -148,58 +153,13 @@
             <div class="field box">
                 <label for="recognition-language" class="label" title="">Speech recognition language</label>
                 <input type="text" id="recognition-language" value="" placeholder="navigator.language"/>
+                <script>
+                    document.getElementById('recognition-language').placeholder = navigator.language;
+                </script>
             </div>
             <div class="field box hidden">
                 <label for="BingCreateImages-api_key" class="label" title="">Microsoft Designer in Bing:</label>
-                <textarea id="BingCreateImages-api_key" name="BingCreateImages[api_key]" placeholder="&quot;_U&quot; cookie"></textarea>
-            </div>
-            <div class="field box hidden">
-                <label for="Cerebras-api_key" class="label" title="">Cerebras Inference:</label>
-                <textarea id="Cerebras-api_key" name="Cerebras[api_key]" placeholder="api_key"></textarea>
-            </div>
-            <div class="field box hidden">
-                <label for="Anthropic-api_key" class="label" title="">Anthropic API:</label>
-                <textarea id="Anthropic-api_key" name="Anthropic[api_key]" placeholder="api_key"></textarea>
-            </div>
-            <div class="field box hidden">
-                <label for="DeepInfra-api_key" class="label" title="">DeepInfra:</label>
-                <textarea id="DeepInfra-api_key" name="DeepInfra[api_key]" class="DeepInfraImage-api_key" placeholder="api_key"></textarea>
-            </div>
-            <div class="field box hidden">
-                <label for="GeminiPro-api_key" class="label" title="">Gemini API:</label>
-                <textarea id="GeminiPro-api_key" name="GeminiPro[api_key]" placeholder="api_key"></textarea>
-            </div>
-            <div class="field box hidden">
-                <label for="Groq-api_key" class="label" title="">Groq:</label>
-                <textarea id="Groq-api_key" name="Groq[api_key]" placeholder="api_key"></textarea>
-            </div>
-            <div class="field box hidden">
-                <label for="GlhfChat-api_key" class="label" title="">GlhfChat:</label>
-                <textarea id="GlhfChat-api_key" name="GlhfChat[api_key]" placeholder="api_key"></textarea>
-            </div>
-            <div class="field box hidden">
-                <label for="HuggingFace-api_key" class="label" title="">HuggingFace:</label>
-                <textarea id="HuggingFace-api_key" name="HuggingFace[api_key]" class="HuggingFaceAPI-api_key" placeholder="api_key"></textarea>
-            </div>
-            <div class="field box hidden">
-                <label for="OpenaiAPI-api_key" class="label" title="">OpenAI API:</label>
-                <textarea id="OpenaiAPI-api_key" name="OpenaiAPI[api_key]" placeholder="api_key"></textarea>
-            </div>
-            <div class="field box hidden">
-                <label for="OpenRouter-api_key" class="label" title="">OpenRouter:</label>
-                <textarea id="OpenRouter-api_key" name="OpenRouter[api_key]" placeholder="api_key"></textarea>
-            </div>
-            <div class="field box hidden">
-                <label for="PerplexityApi-api_key" class="label" title="">Perplexity API:</label>
-                <textarea id="PerplexityApi-api_key" name="PerplexityApi[api_key]" placeholder="api_key"></textarea>
-            </div>
-            <div class="field box hidden">
-                <label for="Replicate-api_key" class="label" title="">Replicate:</label>
-                <textarea id="Replicate-api_key" name="Replicate[api_key]" class="ReplicateImage-api_key" placeholder="api_key"></textarea>
-            </div>
-            <div class="field box hidden">
-                <label for="xAI-api_key" class="label" title="">xAI:</label>
-                <textarea id="xAI-api_key" name="xAI[api_key]" placeholder="api_key"></textarea>
+                <input type="text" id="BingCreateImages-api_key" name="BingCreateImages[api_key]" placeholder="&quot;_U&quot; cookie"/>
             </div>
             </div>
             <div class="bottom_buttons">
@@ -226,7 +186,7 @@
             </div>
         </div>
         <div class="conversation">
-            <textarea id="systemPrompt" class="box" placeholder="System prompt"></textarea>
+            <textarea id="chatPrompt" class="box" placeholder="System prompt"></textarea>
             <div id="messages" class="box"></div>
             <button class="slide-systemPrompt">
                 <i class="fa-solid fa-angles-up"></i>

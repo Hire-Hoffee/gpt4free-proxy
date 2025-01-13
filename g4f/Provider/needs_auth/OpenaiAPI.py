@@ -8,7 +8,7 @@ from ..base_provider import AsyncGeneratorProvider, ProviderModelMixin, RaiseErr
 from ...typing import Union, Optional, AsyncResult, Messages, ImagesType
 from ...requests import StreamSession, raise_for_status
 from ...providers.response import FinishReason, ToolCalls, Usage
-from ...errors import MissingAuthError, ResponseError
+from ...errors import MissingAuthError
 from ...image import to_data_uri
 from ... import debug
 
@@ -36,7 +36,7 @@ class OpenaiAPI(AsyncGeneratorProvider, ProviderModelMixin, RaiseErrorMixin):
                 response = requests.get(f"{api_base}/models", headers=headers)
                 raise_for_status(response)
                 data = response.json()
-                cls.models = [model.get("id") for model in data.get("data")]
+                cls.models = [model.get("id") for model in (data.get("data") if isinstance(data, dict) else data)]
                 cls.models.sort()
             except Exception as e:
                 debug.log(e)
@@ -136,6 +136,7 @@ class OpenaiAPI(AsyncGeneratorProvider, ProviderModelMixin, RaiseErrorMixin):
                             finish = cls.read_finish_reason(choice)
                             if finish is not None:
                                 yield finish
+                                break
 
     @staticmethod
     def read_finish_reason(choice: dict) -> Optional[FinishReason]:
