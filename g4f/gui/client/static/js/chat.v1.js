@@ -35,6 +35,7 @@ let title_storage = {};
 let parameters_storage = {};
 let finish_storage = {};
 let usage_storage = {};
+let reasoning_storage = {}
 
 messageInput.addEventListener("blur", () => {
     window.scrollTo(0, 0);
@@ -68,6 +69,17 @@ if (window.markdownit) {
             .replaceAll("<a href=", '<a target="_blank" href=')
             .replaceAll('<code>', '<code class="language-plaintext">')
     }
+}
+
+function render_reasoning(reasoning, final = false) {
+    return `<div class="reasoning_body">
+        <div class="reasoning_title">
+           <strong>Reasoning <i class="fa-solid fa-brain"></i>:</strong> ${escapeHtml(reasoning.status)}
+        </div>
+        <div class="reasoning_text${final ? " final hidden" : ""}">
+        ${markdown_render(reasoning.text)}
+        </div>
+    </div>`;
 }
 
 function filter_message(text) {
@@ -169,7 +181,7 @@ const get_message_el = (el) => {
 }
 
 const register_message_buttons = async () => {
-    document.querySelectorAll(".message .content .provider").forEach(async (el) => {
+    message_box.querySelectorAll(".message .content .provider").forEach(async (el) => {
         if (!("click" in el.dataset)) {
             el.dataset.click = "true";
             const provider_forms = document.querySelector(".provider_forms");
@@ -192,7 +204,7 @@ const register_message_buttons = async () => {
         }
     });
 
-    document.querySelectorAll(".message .fa-xmark").forEach(async (el) => {
+    message_box.querySelectorAll(".message .fa-xmark").forEach(async (el) => {
         if (!("click" in el.dataset)) {
             el.dataset.click = "true";
             el.addEventListener("click", async () => {
@@ -203,7 +215,7 @@ const register_message_buttons = async () => {
         }
     });
 
-    document.querySelectorAll(".message .fa-clipboard").forEach(async (el) => {
+    message_box.querySelectorAll(".message .fa-clipboard").forEach(async (el) => {
         if (!("click" in el.dataset)) {
             el.dataset.click = "true";
             el.addEventListener("click", async () => {
@@ -226,7 +238,7 @@ const register_message_buttons = async () => {
         }
     });
 
-    document.querySelectorAll(".message .fa-file-export").forEach(async (el) => {
+    message_box.querySelectorAll(".message .fa-file-export").forEach(async (el) => {
         if (!("click" in el.dataset)) {
             el.dataset.click = "true";
             el.addEventListener("click", async () => {
@@ -244,7 +256,7 @@ const register_message_buttons = async () => {
         }
     });
 
-    document.querySelectorAll(".message .fa-volume-high").forEach(async (el) => {
+    message_box.querySelectorAll(".message .fa-volume-high").forEach(async (el) => {
         if (!("click" in el.dataset)) {
             el.dataset.click = "true";
             el.addEventListener("click", async () => {
@@ -270,7 +282,7 @@ const register_message_buttons = async () => {
         }
     });
 
-    document.querySelectorAll(".message .regenerate_button").forEach(async (el) => {
+    message_box.querySelectorAll(".message .regenerate_button").forEach(async (el) => {
         if (!("click" in el.dataset)) {
             el.dataset.click = "true";
             el.addEventListener("click", async () => {
@@ -282,7 +294,7 @@ const register_message_buttons = async () => {
         }
     });
 
-    document.querySelectorAll(".message .continue_button").forEach(async (el) => {
+    message_box.querySelectorAll(".message .continue_button").forEach(async (el) => {
         if (!("click" in el.dataset)) {
             el.dataset.click = "true";
             el.addEventListener("click", async () => {
@@ -297,7 +309,7 @@ const register_message_buttons = async () => {
         }
     });
 
-    document.querySelectorAll(".message .fa-whatsapp").forEach(async (el) => {
+    message_box.querySelectorAll(".message .fa-whatsapp").forEach(async (el) => {
         if (!("click" in el.dataset)) {
             el.dataset.click = "true";
             el.addEventListener("click", async () => {
@@ -307,7 +319,7 @@ const register_message_buttons = async () => {
         }
     });
 
-    document.querySelectorAll(".message .fa-print").forEach(async (el) => {
+    message_box.querySelectorAll(".message .fa-print").forEach(async (el) => {
         if (!("click" in el.dataset)) {
             el.dataset.click = "true";
             el.addEventListener("click", async () => {
@@ -320,6 +332,16 @@ const register_message_buttons = async () => {
                     message_el.classList.remove("print");
                 }, 1000);
                 window.print()
+            })
+        }
+    });
+
+    message_box.querySelectorAll(".message .reasoning_title").forEach(async (el) => {
+        if (!("click" in el.dataset)) {
+            el.dataset.click = "true";
+            el.addEventListener("click", async () => {
+                let text_el = el.parentElement.querySelector(".reasoning_text");
+                text_el.classList[text_el.classList.contains("hidden") ? "remove" : "add"]("hidden");
             })
         }
     });
@@ -351,11 +373,6 @@ const handle_ask = async () => {
     await count_input()
     await add_conversation(window.conversation_id);
 
-    if ("text" in fileInput.dataset) {
-        message += '\n```' + fileInput.dataset.type + '\n'; 
-        message += fileInput.dataset.text;
-        message += '\n```'
-    }
     let message_index = await add_message(window.conversation_id, "user", message);
     let message_id = get_message_id();
 
@@ -426,18 +443,18 @@ regenerate_button.addEventListener("click", async () => {
 });
 
 stop_generating.addEventListener("click", async () => {
-    stop_generating.classList.add("stop_generating-hidden");
     regenerate_button.classList.remove("regenerate-hidden");
+    stop_generating.classList.add("stop_generating-hidden");
     let key;
     for (key in controller_storage) {
         if (!controller_storage[key].signal.aborted) {
+            console.log(`aborted ${window.conversation_id} #${key}`);
+            controller_storage[key].abort();
             let message = message_storage[key];
             if (message) {
                 content_storage[key].inner.innerHTML += " [aborted]";
                 message_storage[key] += " [aborted]";
-                console.log(`aborted ${window.conversation_id} #${key}`);
             }
-            controller_storage[key].abort();
         }
     }
     await load_conversation(window.conversation_id, false);
@@ -474,7 +491,7 @@ const prepare_messages = (messages, message_index = -1, do_continue = false, do_
     messages.forEach((message) => {
         message_copy = { ...message };
         if (last_message) {
-            if (last_message["role"] == message["role"]) {
+            if (last_message["role"] == message["role"] &&  message["role"] == "assistant") {
                 message_copy["content"] = last_message["content"] + message_copy["content"];
                 new_messages.pop();
             }
@@ -520,6 +537,7 @@ const prepare_messages = (messages, message_index = -1, do_continue = false, do_
             delete new_message.synthesize;
             delete new_message.finish;
             delete new_message.usage;
+            delete new_message.reasoning;
             delete new_message.conversation;
             delete new_message.continue;
             // Append message to new messages
@@ -716,11 +734,21 @@ async function add_message_chunk(message, message_id, provider, scroll) {
     } else if (message.type == "title") {
         title_storage[message_id] = message.title;
     } else if (message.type == "login") {
-        update_message(content_map, message_id, message.login, scroll);
+        update_message(content_map, message_id, markdown_render(message.login), scroll);
     } else if (message.type == "finish") {
         finish_storage[message_id] = message.finish;
     } else if (message.type == "usage") {
         usage_storage[message_id] = message.usage;
+    } else if (message.type == "reasoning") {
+        if (!reasoning_storage[message_id]) {
+            reasoning_storage[message_id] = message;
+            reasoning_storage[message_id].text = "";
+        } else if (message.status) {
+            reasoning_storage[message_id].status = message.status;
+        } else if (message.token) {
+            reasoning_storage[message_id].text += message.token;
+        }
+        update_message(content_map, message_id, render_reasoning(reasoning_storage[message_id]), scroll);
     } else if (message.type == "parameters") {
         if (!parameters_storage[provider]) {
             parameters_storage[provider] = {};
@@ -730,6 +758,13 @@ async function add_message_chunk(message, message_id, provider, scroll) {
         });
         await load_provider_parameters(provider);
     }
+}
+
+function is_stopped() {
+    if (stop_generating.classList.contains('stop_generating-hidden')) {
+        return true;
+    }
+    return false;
 }
 
 const ask_gpt = async (message_id, message_index = -1, regenerate = false, provider = null, model = null, action = null) => {
@@ -799,11 +834,12 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
         const files = input && input.files.length > 0 ? input.files : null;
         const download_images = document.getElementById("download_images")?.checked;
         const api_key = get_api_key_by_provider(provider);
+        const api_base = provider == "Custom" ? document.getElementById(`${provider}-api_base`).value : null;
         const ignored = Array.from(settings.querySelectorAll("input.provider:not(:checked)")).map((el)=>el.value);
         await api("conversation", {
             id: message_id,
             conversation_id: window.conversation_id,
-            conversation: conversation.data && provider in conversation.data ? conversation.data[provider] : null,
+            conversation: provider && conversation.data && provider in conversation.data ? conversation.data[provider] : null,
             model: model,
             web_search: switchInput.checked,
             provider: provider,
@@ -811,6 +847,7 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
             action: action,
             download_images: download_images,
             api_key: api_key,
+            api_base: api_base,
             ignored: ignored,
         }, files, message_id, scroll);
         content_map.update_timeouts.forEach((timeoutId)=>clearTimeout(timeoutId));
@@ -829,13 +866,12 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
             content_map.inner.innerHTML += markdown_render(`**An error occured:** ${e}`);
         }
     }
-    delete controller_storage[message_id];
     if (message_storage[message_id]) {
         const message_provider = message_id in provider_storage ? provider_storage[message_id] : null;
         await add_message(
             window.conversation_id,
             "assistant",
-            message_storage[message_id] + (error_storage[message_id] ? " [error]" : ""),
+            message_storage[message_id] + (error_storage[message_id] ? " [error]" : "") + (stop_generating.classList.contains('stop_generating-hidden') ? " [aborted]" : ""),
             message_provider,
             message_index,
             synthesize_storage[message_id],
@@ -843,8 +879,10 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
             title_storage[message_id],
             finish_storage[message_id],
             usage_storage[message_id],
+            reasoning_storage[message_id],
             action=="continue"
         );
+        delete controller_storage[message_id];
         delete message_storage[message_id];
         if (!error_storage[message_id]) {
             await safe_load_conversation(window.conversation_id, scroll);
@@ -964,7 +1002,7 @@ const delete_conversation = async (conversation_id) => {
 
 const set_conversation = async (conversation_id) => {
     try {
-        history.pushState({}, null, `/chat/${conversation_id}`);
+        add_url_to_history(`/chat/${conversation_id}`);
     } catch (e) {
         console.error(e);
     }
@@ -1038,6 +1076,7 @@ function merge_messages(message1, message2) {
 const load_conversation = async (conversation_id, scroll=true) => {
     let conversation = await get_conversation(conversation_id);
     let messages = conversation?.items || [];
+    console.debug("Conversation:", conversation)
 
     if (!conversation) {
         return;
@@ -1066,7 +1105,7 @@ const load_conversation = async (conversation_id, scroll=true) => {
         }
         buffer = buffer.replace(/ \[aborted\]$/g, "").replace(/ \[error\]$/g, "");
         new_content = item.content.replace(/ \[aborted\]$/g, "").replace(/ \[error\]$/g, "");
-        buffer += merge_messages(buffer, new_content);
+        buffer = merge_messages(buffer, new_content);
         last_model = item.provider?.model;
         providers.push(item.provider?.name);
         let next_i = parseInt(i) + 1;
@@ -1094,11 +1133,8 @@ const load_conversation = async (conversation_id, scroll=true) => {
         let add_buttons = [];
         // Find buttons to add
         actions = ["variant"]
-        if (item.finish && item.finish.actions) {
-            actions = item.finish.actions
-        }
         // Add continue button if possible
-        if (item.role == "assistant" && !actions.includes("continue")) {
+        if (item.role == "assistant") {
             let reason = "stop";
             // Read finish reason from conversation
             if (item.finish && item.finish.reason) {
@@ -1163,7 +1199,10 @@ const load_conversation = async (conversation_id, scroll=true) => {
                 </div>
                 <div class="content">
                     ${provider}
-                    <div class="content_inner">${markdown_render(buffer)}</div>
+                    <div class="content_inner">
+                        ${item.reasoning ? render_reasoning(item.reasoning, true): ""}
+                        ${markdown_render(buffer)}
+                    </div>
                     <div class="count">
                         ${count_words_and_tokens(buffer, next_provider?.model, completion_tokens, prompt_tokens)}
                         ${add_buttons.join("")}
@@ -1176,9 +1215,6 @@ const load_conversation = async (conversation_id, scroll=true) => {
     if (window.GPTTokenizer_cl100k_base) {
         const filtered = prepare_messages(messages, null, true, false);
         if (filtered.length > 0) {
-            if (GPTTokenizer_o200k_base && last_model?.startsWith("gpt-4o") || last_model?.startsWith("o1")) {
-                return GPTTokenizer_o200k_base?.encodeChat(filtered, last_model).length;
-            }
             last_model = last_model?.startsWith("gpt-3") ? "gpt-3.5-turbo" : "gpt-4"
             let count_total = GPTTokenizer_cl100k_base?.encodeChat(filtered, last_model).length
             if (count_total > 0) {
@@ -1248,7 +1284,7 @@ async function add_conversation(conversation_id) {
         });
     }
     try {
-        history.pushState({}, null, `/chat/${conversation_id}`);
+        add_url_to_history(`/chat/${conversation_id}`);
     } catch (e) {
         console.error(e);
     }
@@ -1297,6 +1333,7 @@ const add_message = async (
     title = null,
     finish = null,
     usage = null,
+    reasoning = null,
     do_continue = false
 ) => {
     const conversation = await get_conversation(conversation_id);
@@ -1327,6 +1364,9 @@ const add_message = async (
     }
     if (usage) {
         new_message.usage = usage;
+    }
+    if (reasoning) {
+        new_message.reasoning = reasoning;
     }
     if (do_continue) {
         new_message.continue = true;
@@ -1377,7 +1417,7 @@ const load_conversations = async () => {
                 </div>
                 <i onclick="show_option('${conversation.id}')" class="fa-solid fa-ellipsis-vertical" id="conv-${conversation.id}"></i>
                 <div id="cho-${conversation.id}" class="choise" style="display:none;">
-                    <i onclick="delete_conversation('${conversation.id}')" class="fa-regular fa-trash"></i>
+                    <i onclick="delete_conversation('${conversation.id}')" class="fa-solid fa-trash"></i>
                     <i onclick="hide_option('${conversation.id}')" class="fa-regular fa-x"></i>
                 </div>
             </div>
@@ -1440,17 +1480,23 @@ sidebar_button.addEventListener("click", async () => {
     } else {
         sidebar.classList.add("shown");
         sidebar_button.classList.add("rotated");
-        history.pushState({}, null, "/menu/");
+        add_url_to_history("/menu/");
     }
     window.scrollTo(0, 0);
 });
+
+function add_url_to_history(url) {
+    if (!window?.pywebview) {
+        history.pushState({}, null, url);
+    }
+}
 
 function open_settings() {
     if (settings.classList.contains("hidden")) {
         chat.classList.add("hidden");
         sidebar.classList.remove("shown");
         settings.classList.remove("hidden");
-        history.pushState({}, null, "/settings/");
+        add_url_to_history("/settings/");
     } else {
         settings.classList.add("hidden");
         chat.classList.remove("hidden");
@@ -1529,8 +1575,9 @@ const load_settings_storage = async () => {
                     } else {
                         element.value = value;
                     }
+                    break;
                 default:
-                    console.warn("Unresolved element type");
+                    console.warn("`Unresolved element type:", element.type);
             }
         }
     });
@@ -1596,23 +1643,24 @@ function count_words_and_tokens(text, model, completion_tokens, prompt_tokens) {
 
 function update_message(content_map, message_id, content = null, scroll = true) {
     content_map.update_timeouts.push(setTimeout(() => {
-        if (!content) content = message_storage[message_id];
-        html = markdown_render(content);
-        let lastElement, lastIndex = null;
-        for (element of ['</p>', '</code></pre>', '</p>\n</li>\n</ol>', '</li>\n</ol>', '</li>\n</ul>']) {
-            const index = html.lastIndexOf(element)
-            if (index - element.length > lastIndex) {
-                lastElement = element;
-                lastIndex = index;
+        if (!content) {
+            content = markdown_render(message_storage[message_id]);
+            let lastElement, lastIndex = null;
+            for (element of ['</p>', '</code></pre>', '</p>\n</li>\n</ol>', '</li>\n</ol>', '</li>\n</ul>']) {
+                const index = content.lastIndexOf(element)
+                if (index - element.length > lastIndex) {
+                    lastElement = element;
+                    lastIndex = index;
+                }
+            }
+            if (lastIndex) {
+                content = content.substring(0, lastIndex) + '<span class="cursor"></span>' + lastElement;
             }
         }
-        if (lastIndex) {
-            html = html.substring(0, lastIndex) + '<span class="cursor"></span>' + lastElement;
-        }
+        content_map.inner.innerHTML = content;
         if (error_storage[message_id]) {
             content_map.inner.innerHTML += markdown_render(`**An error occured:** ${error_storage[message_id]}`);
         }
-        content_map.inner.innerHTML = html;
         content_map.count.innerText = count_words_and_tokens(message_storage[message_id], provider_storage[message_id]?.model);
         highlight(content_map.inner);
         if (scroll) {
@@ -1650,17 +1698,29 @@ window.addEventListener('DOMContentLoaded', async function() {
     await on_load();
     if (window.conversation_id == "{{chat_id}}") {
         window.conversation_id = uuid();
+    } else {
+        await on_api();
     }
+});
+
+window.addEventListener('pywebviewready', async function() {
     await on_api();
 });
 
 async function on_load() {
     count_input();
-    if (/\/chat\/.+/.test(window.location.href)) {
+    if (/\/chat\/[^?]+/.test(window.location.href)) {
         load_conversation(window.conversation_id);
     } else {
-        say_hello()
         chatPrompt.value = document.getElementById("systemPrompt")?.value || "";
+        let chat_url = new URL(window.location.href)
+        let chat_params = new URLSearchParams(chat_url.search);
+        if (chat_params.get("prompt")) {
+            messageInput.value = chat_params.get("prompt");
+            await handle_ask();
+        } else {
+            say_hello()
+        }
     }
     load_conversations();
 }
@@ -1700,6 +1760,7 @@ const load_provider_option = (input, provider_name) => {
 };
 
 async function on_api() {
+    load_version();
     let prompt_lock = false;
     messageInput.addEventListener("keydown", async (evt) => {
         if (prompt_lock) return;
@@ -1724,82 +1785,75 @@ async function on_api() {
     });
     messageInput.focus();
     let provider_options = [];
-    try {
-        models = await api("models");
-        models.forEach((model) => {
-            let option = document.createElement("option");
-            option.value = model.name;
-            option.text = model.name + (model.image ? " (Image Generation)" : "");
-            option.dataset.providers = model.providers.join(" ");
-            modelSelect.appendChild(option);
-        });
-        providers = await api("providers")
-        providers.sort((a, b) => a.label.localeCompare(b.label));
-        let login_urls = {};
-        providers.forEach((provider) => {
-            let option = document.createElement("option");
-            option.value = provider.name;
-            option.dataset.label = provider.label;
-            option.text = provider.label
-                + (provider.vision ? " (Image Upload)" : "")
-                + (provider.image ? " (Image Generation)" : "")
-                + (provider.webdriver ? " (Webdriver)" : "")
-                + (provider.auth ? " (Auth)" : "");
-            if (provider.parent)
-                option.dataset.parent = provider.parent;
-            providerSelect.appendChild(option);
+    models = await api("models");
+    models.forEach((model) => {
+        let option = document.createElement("option");
+        option.value = model.name;
+        option.text = model.name + (model.image ? " (Image Generation)" : "");
+        option.dataset.providers = model.providers.join(" ");
+        modelSelect.appendChild(option);
+    });
+    providers = await api("providers")
+    providers.sort((a, b) => a.label.localeCompare(b.label));
+    let login_urls = {};
+    providers.forEach((provider) => {
+        let option = document.createElement("option");
+        option.value = provider.name;
+        option.dataset.label = provider.label;
+        option.text = provider.label
+            + (provider.vision ? " (Image Upload)" : "")
+            + (provider.image ? " (Image Generation)" : "")
+            + (provider.webdriver ? " (Webdriver)" : "")
+            + (provider.auth ? " (Auth)" : "");
+        if (provider.parent)
+            option.dataset.parent = provider.parent;
+        providerSelect.appendChild(option);
 
-            if (provider.parent) {
-                if (!login_urls[provider.parent]) {
-                    login_urls[provider.parent] = [provider.label, provider.login_url, [provider.name]];
-                } else {
-                    login_urls[provider.parent][2].push(provider.name);
-                }
-            } else if (provider.login_url) {
-                if (!login_urls[provider.name]) {
-                    login_urls[provider.name] = [provider.label, provider.login_url, []];
-                } else {
-                    login_urls[provider.name][0] = provider.label;
-                    login_urls[provider.name][1] = provider.login_url;
-                }
+        if (provider.parent) {
+            if (!login_urls[provider.parent]) {
+                login_urls[provider.parent] = [provider.label, provider.login_url, [provider.name]];
+            } else {
+                login_urls[provider.parent][2].push(provider.name);
             }
-        });
-        for (let [name, [label, login_url, childs]] of Object.entries(login_urls)) {
-            if (!login_url) {
-                continue;
+        } else if (provider.login_url) {
+            if (!login_urls[provider.name]) {
+                login_urls[provider.name] = [provider.label, provider.login_url, []];
+            } else {
+                login_urls[provider.name][0] = provider.label;
+                login_urls[provider.name][1] = provider.login_url;
             }
-            option = document.createElement("div");
-            option.classList.add("field", "box", "hidden");
-            childs = childs.map((child)=>`${child}-api_key`).join(" ");
-            option.innerHTML = `
-                <label for="${name}-api_key" class="label" title="">${label}:</label>
-                <input type="text" id="${name}-api_key" name="${name}[api_key]" class="${childs}" placeholder="api_key"/>
-                <a href="${login_url}" target="_blank" title="Login to ${label}">Get API key</a>
-            `;
-            settings.querySelector(".paper").appendChild(option);
         }
-        providers.forEach((provider) => {
-            if (!provider.parent) {
-                option = document.createElement("div");
-                option.classList.add("field");
-                option.innerHTML = `
-                    <span class="label">Enable ${provider.label}</span>
-                    <input id="Provider${provider.name}" type="checkbox" name="Provider${provider.name}" value="${provider.name}" class="provider" checked="">
-                    <label for="Provider${provider.name}" class="toogle" title="Remove provider from dropdown"></label>
-                `;
-                option.querySelector("input").addEventListener("change", (event) => load_provider_option(event.target, provider.name));
-                settings.querySelector(".paper").appendChild(option);
-                provider_options[provider.name] = option;
-            }
-        });
-        await load_provider_models(appStorage.getItem("provider"));
-    } catch (e) {
-        console.error(e)
-        // Redirect to show basic authenfication
-        if (document.location.pathname == "/chat/") {
-            //document.location.href = `/chat/error`;
+    });
+    for (let [name, [label, login_url, childs]] of Object.entries(login_urls)) {
+        if (!login_url) {
+            continue;
         }
+        option = document.createElement("div");
+        option.classList.add("field", "box", "hidden");
+        childs = childs.map((child)=>`${child}-api_key`).join(" ");
+        option.innerHTML = `
+            <label for="${name}-api_key" class="label" title="">${label}:</label>
+            <input type="text" id="${name}-api_key" name="${name}[api_key]" class="${childs}" placeholder="api_key"/>
+            <a href="${login_url}" target="_blank" title="Login to ${label}">Get API key</a>
+        `;
+        settings.querySelector(".paper").appendChild(option);
     }
+    providers.forEach((provider) => {
+        if (!provider.parent) {
+            option = document.createElement("div");
+            option.classList.add("field");
+            option.innerHTML = `
+                <span class="label">Enable ${provider.label}</span>
+                <input id="Provider${provider.name}" type="checkbox" name="Provider${provider.name}" value="${provider.name}" class="provider" checked="">
+                <label for="Provider${provider.name}" class="toogle" title="Remove provider from dropdown"></label>
+            `;
+            option.querySelector("input").addEventListener("change", (event) => load_provider_option(event.target, provider.name));
+            settings.querySelector(".paper").appendChild(option);
+            provider_options[provider.name] = option;
+        }
+    });
+    await load_provider_models(appStorage.getItem("provider"))
+
     register_settings_storage();
     await load_settings_storage()
     Object.entries(provider_options).forEach(
@@ -1876,7 +1930,6 @@ async function load_version() {
     document.getElementById("version_text").innerHTML = text
     setTimeout(load_version, 1000 * 60 * 60); // 1 hour
 }
-setTimeout(load_version, 100);
 
 [imageInput, cameraInput].forEach((el) => {
     el.addEventListener('click', async () => {
@@ -1890,7 +1943,20 @@ setTimeout(load_version, 100);
 
 fileInput.addEventListener('click', async (event) => {
     fileInput.value = '';
-    delete fileInput.dataset.text;
+});
+
+cameraInput?.addEventListener("click", (e) => {
+    if (window?.pywebview) {
+        e.preventDefault();
+        pywebview.api.take_picture();
+    }
+});
+
+imageInput?.addEventListener("click", (e) => {
+    if (window?.pywebview) {
+        e.preventDefault();
+        pywebview.api.choose_image();
+    }
 });
 
 async function upload_cookies() {
@@ -1920,7 +1986,6 @@ function formatFileSize(bytes) {
 async function upload_files(fileInput) {
     const paperclip = document.querySelector(".user-input .fa-paperclip");
     const bucket_id = uuid();
-    delete fileInput.dataset.text;
     paperclip.classList.add("blink");
 
     const formData = new FormData();
@@ -1980,8 +2045,7 @@ fileInput.addEventListener('change', async (event) => {
         if (type == "json") {
             const reader = new FileReader();
             reader.addEventListener('load', async (event) => {
-                fileInput.dataset.text = event.target.result;
-                const data = JSON.parse(fileInput.dataset.text);
+                const data = JSON.parse(event.target.result);
                 if (data.options && "g4f" in data.options) {
                     let count = 0;
                     Object.keys(data).forEach(key => {
@@ -1990,7 +2054,6 @@ fileInput.addEventListener('change', async (event) => {
                             count += 1;
                         }
                     });
-                    delete fileInput.dataset.text;
                     await load_conversations();
                     fileInput.value = "";
                     inputCount.innerText = `${count} Conversations were imported successfully`;
@@ -2012,8 +2075,6 @@ fileInput.addEventListener('change', async (event) => {
             });
             reader.readAsText(fileInput.files[0]);
         }
-    } else {
-        delete fileInput.dataset.text;
     }
 });
 
@@ -2033,16 +2094,31 @@ function get_selected_model() {
 }
 
 async function api(ressource, args=null, files=null, message_id=null, scroll=true) {
-    let api_key;
+    if (window?.pywebview) {
+        if (args !== null) {
+            if (ressource == "conversation") {
+                return pywebview.api[`get_${ressource}`](args, message_id, scroll);
+            }
+            if (ressource == "models") {
+                ressource = "provider_models";
+            }
+            return pywebview.api[`get_${ressource}`](args);
+        }
+        return pywebview.api[`get_${ressource}`]();
+    }
+    const headers = {};
     if (ressource == "models" && args) {
         api_key = get_api_key_by_provider(args);
+        if (api_key) {
+            headers.x_api_key = api_key;
+        }
+        api_base = args == "Custom" ? document.getElementById(`${args}-api_base`).value : null;
+        if (api_base) {
+            headers.x_api_base = api_base;
+        }
         ressource = `${ressource}/${args}`;
     }
-    const url = `/backend-api/v2/${ressource}`;
-    const headers = {};
-    if (api_key) {
-        headers.x_api_key = api_key;
-    }
+    const url = new URL(`/backend-api/v2/${ressource}`, window?.location || "http://localhost:8080");
     if (ressource == "conversation") {
         let body = JSON.stringify(args);
         headers.accept = 'text/event-stream';
@@ -2096,9 +2172,9 @@ async function read_response(response, message_id, provider, scroll) {
 function get_api_key_by_provider(provider) {
     let api_key = null;
     if (provider) {
-        api_key = document.getElementById(`${provider}-api_key`)?.id || null;
+        api_key = document.querySelector(`.${provider}-api_key`)?.id || null;
         if (api_key == null) {
-            api_key = document.querySelector(`.${provider}-api_key`)?.id || null;
+            api_key = document.getElementById(`${provider}-api_key`)?.id || null;
         }
         if (api_key) {
             api_key = appStorage.getItem(api_key);
@@ -2224,7 +2300,7 @@ if (SpeechRecognition) {
     };
     recognition.onend = function() {
         messageInput.value = `${startValue ? startValue + "\n" : ""}${buffer}`;
-        if (!microLabel.classList.contains("recognition")) {
+        if (microLabel.classList.contains("recognition")) {
             recognition.start();
         } else {
             messageInput.readOnly = false;

@@ -10,11 +10,11 @@
     <meta property="og:description" content="A conversational AI system that listens, learns, and challenges">
     <meta property="og:url" content="https://g4f.ai">
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/all.min.css">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16x16.png">
     <link rel="manifest" href="/static/img/site.webmanifest">
-    <script src="/static/js/icons.js"></script>
     <script src="/static/js/highlightjs-copy.min.js"></script>
     <script src="/static/js/chat.v1.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.1/dist/markdown-it.min.js"></script>
@@ -143,7 +143,7 @@
                 <label for="refine" class="toogle" title=""></label>
             </div>
             <div class="field box">
-                <label for="systemPrompt" class="label" title="">Default for System prompt</label>
+                <label for="systemPrompt" class="label" title="">System prompt</label>
                 <textarea id="systemPrompt" placeholder="You are a helpful assistant."></textarea>
             </div>
             <div class="field box">
@@ -157,6 +157,14 @@
                     document.getElementById('recognition-language').placeholder = navigator.language;
                 </script>
             </div>
+            <div class="field box">
+                <label for="Custom-api_base" class="label" title="">Custom Provider (Base Url):</label>
+                <input type="text" id="Custom-api_base" name="Custom[api_base]" placeholder="http://localhost:8080/v1"/>
+            </div>
+            <div class="field box hidden">
+                <label for="Custom-api_key" class="label" title="">Custom Provider:</label>
+                <input type="text" id="Custom-api_key" name="Custom[api_key]" placeholder="api_key"/>
+            </div>
             <div class="field box hidden">
                 <label for="BingCreateImages-api_key" class="label" title="">Microsoft Designer in Bing:</label>
                 <input type="text" id="BingCreateImages-api_key" name="BingCreateImages[api_key]" placeholder="&quot;_U&quot; cookie"/>
@@ -164,7 +172,7 @@
             </div>
             <div class="bottom_buttons">
                 <button onclick="delete_conversations()">
-                    <i class="fa-regular fa-trash"></i>
+                    <i class="fa-solid fa-trash"></i>
                     <span>Clear Conversations</span>
                 </button>
                 <button onclick="save_storage()">
@@ -235,7 +243,7 @@
                         <i class="fa-solid fa-microphone-slash"></i>
                     </label>
                     <div id="send-button">
-                        <i class="fa-solid fa-paper-plane-top"></i>
+                        <i class="fa-regular fa-paper-plane"></i>
                     </div>
                 </div>
             </div>
@@ -254,10 +262,7 @@
                      <option value="gpt-4o">gpt-4o</option>
                      <option value="gpt-4o-mini">gpt-4o-mini</option>
                      <option value="llama-3.1-70b">llama-3.1-70b</option>
-                     <option value="llama-3.1-405b">llama-3.1-405b</option>
                      <option value="mixtral-8x7b">mixtral-8x7b</option>
-                     <option value="gemini-pro">gemini-pro</option>
-                     <option value="gemini-flash">gemini-flash</option>
                      <option value="claude-3.5-sonnet">claude-3.5-sonnet</option>
                      <option value="flux">flux (Image Generation)</option>
                      <option value="dall-e-3">dall-e-3 (Image Generation)</option>

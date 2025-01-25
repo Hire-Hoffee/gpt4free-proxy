@@ -16,8 +16,7 @@ uvicorn
 flask
 brotli
 beautifulsoup4
-aiohttp_socks
-pywebview
+setuptools
 cryptography
 nodriver
 python-multipart

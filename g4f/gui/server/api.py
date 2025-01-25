@@ -13,7 +13,7 @@ from ...tools.run_tools import iter_run_tools
 from ...Provider import ProviderUtils, __providers__
 from ...providers.base_provider import ProviderModelMixin
 from ...providers.retry_provider import IterListProvider
-from ...providers.response import BaseConversation, JsonConversation, FinishReason, Usage
+from ...providers.response import BaseConversation, JsonConversation, FinishReason, Usage, Reasoning
 from ...providers.response import SynthesizeData, TitleGeneration, RequestLogin, Parameters
 from ... import version, models
 from ... import ChatCompletion, get_model_and_provider
@@ -37,12 +37,12 @@ class Api:
         for model, providers in models.__models__.values()]
 
     @staticmethod
-    def get_provider_models(provider: str, api_key: str = None):
+    def get_provider_models(provider: str, api_key: str = None, api_base: str = None):
         if provider in ProviderUtils.convert:
             provider = ProviderUtils.convert[provider]
             if issubclass(provider, ProviderModelMixin):
                 if api_key is not None and "api_key" in signature(provider.get_models).parameters:
-                    models = provider.get_models(api_key=api_key)
+                    models = provider.get_models(api_key=api_key, api_base=api_base)
                 else:
                     models = provider.get_models()
                 return [
@@ -62,7 +62,7 @@ class Api:
             "name": provider.__name__,
             "label": provider.label if hasattr(provider, "label") else provider.__name__,
             "parent": getattr(provider, "parent", None),
-            "image": getattr(provider, "image_models", None) is not None,
+            "image": bool(getattr(provider, "image_models", False)),
             "vision": getattr(provider, "default_vision_model", None) is not None,
             "auth": provider.needs_auth,
             "login_url": getattr(provider, "login_url", None),
@@ -88,22 +88,20 @@ class Api:
         provider = json_data.get('provider')
         messages = json_data.get('messages')
         api_key = json_data.get("api_key")
-        if api_key is not None:
+        if api_key:
             kwargs["api_key"] = api_key
+        api_base = json_data.get("api_base")
+        if api_base:
+            kwargs["api_base"] = api_base
         kwargs["tool_calls"] = [{
             "function": {
                 "name": "bucket_tool"
             },
             "type": "function"
         }]
-        do_web_search = json_data.get('web_search')
-        if do_web_search and provider:
-            kwargs["tool_calls"].append({
-                "function": {
-                    "name": "safe_search_tool"
-                },
-                "type": "function"
-            })
+        web_search = json_data.get('web_search')
+        if web_search:
+            kwargs["web_search"] = web_search
         action = json_data.get('action')
         if action == "continue":
             kwargs["tool_calls"].append({
@@ -159,7 +157,6 @@ class Api:
             **(provider_handler.get_parameters(as_json=True) if hasattr(provider_handler, "get_parameters") else {}),
             "model": model,
             "messages": kwargs.get("messages"),
-            "web_search": kwargs.get("web_search")
         }
         if isinstance(kwargs.get("conversation"), JsonConversation):
             params["conversation"] = kwargs.get("conversation").get_dict()
@@ -209,6 +206,8 @@ class Api:
                     yield self._format_json("finish", chunk.get_dict())
                 elif isinstance(chunk, Usage):
                     yield self._format_json("usage", chunk.get_dict())
+                elif isinstance(chunk, Reasoning):
+                    yield self._format_json("reasoning", token=chunk.token, status=chunk.status)
                 else:
                     yield self._format_json("content", str(chunk))
                 if debug.logs:
@@ -221,10 +220,15 @@ class Api:
         if first:
             yield self.handle_provider(provider_handler, model)
 
-    def _format_json(self, response_type: str, content):
+    def _format_json(self, response_type: str, content = None, **kwargs):
+        if content is not None:
+            return {
+                'type': response_type,
+                response_type: content,
+            }
         return {
             'type': response_type,
-            response_type: content
+            **kwargs
         }
 
     def handle_provider(self, provider_handler, model):

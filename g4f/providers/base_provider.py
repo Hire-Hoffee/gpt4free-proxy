@@ -34,6 +34,7 @@ SAFE_PARAMETERS = [
     "api_key", "api_base", "seed", "width", "height",
     "proof_token", "max_retries", "web_search",
     "guidance_scale", "num_inference_steps", "randomize_seed",
+    "safe", "enhance", "private",
 ]
 
 BASIC_PARAMETERS = {
@@ -61,6 +62,8 @@ PARAMETER_EXAMPLES = {
     "max_new_tokens": 1024,
     "max_tokens": 4096,
     "seed": 42,
+    "stop": ["stop1", "stop2"],
+    "tools": [],
 }
 
 class AbstractProvider(BaseProvider):
@@ -340,7 +343,8 @@ class ProviderModelMixin:
     default_model: str = None
     models: list[str] = []
     model_aliases: dict[str, str] = {}
-    image_models: list = None
+    image_models: list = []
+    vision_models: list = []
     last_model: str = None
 
     @classmethod

@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-import json
-from aiohttp import ClientSession
-
 from ..typing import AsyncResult, Messages
-from ..requests.raise_for_status import raise_for_status
-from .base_provider import AsyncGeneratorProvider, ProviderModelMixin
+from .needs_auth import OpenaiAPI
 
-class DeepInfraChat(AsyncGeneratorProvider, ProviderModelMixin):
+class DeepInfraChat(OpenaiAPI):
+    label = __name__
     url = "https://deepinfra.com/chat"
-    api_endpoint = "https://api.deepinfra.com/v1/openai/chat/completions"
+    login_url = None
+    needs_auth = False
+    api_base = "https://api.deepinfra.com/v1/openai"
 
     working = True
     supports_stream = True
@@ -24,6 +23,7 @@ class DeepInfraChat(AsyncGeneratorProvider, ProviderModelMixin):
         'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
         'Qwen/QwQ-32B-Preview',
         'microsoft/WizardLM-2-8x22B',
+        'microsoft/WizardLM-2-7B',
         'Qwen/Qwen2.5-72B-Instruct',
         'Qwen/Qwen2.5-Coder-32B-Instruct',
         'nvidia/Llama-3.1-Nemotron-70B-Instruct',
@@ -35,6 +35,7 @@ class DeepInfraChat(AsyncGeneratorProvider, ProviderModelMixin):
         "llama-3.1-70b": "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
         "qwq-32b": "Qwen/QwQ-32B-Preview",
         "wizardlm-2-8x22b": "microsoft/WizardLM-2-8x22B",
+        "wizardlm-2-7b": "microsoft/WizardLM-2-7B",
         "qwen-2-72b": "Qwen/Qwen2.5-72B-Instruct",
         "qwen-2.5-coder-32b": "Qwen/Qwen2.5-Coder-32B-Instruct",
         "nemotron-70b": "nvidia/Llama-3.1-Nemotron-70B-Instruct",
@@ -45,44 +46,15 @@ class DeepInfraChat(AsyncGeneratorProvider, ProviderModelMixin):
         cls,
         model: str,
         messages: Messages,
-        proxy: str = None,
+        headers: dict = {},
         **kwargs
     ) -> AsyncResult:
-        model = cls.get_model(model)
-
         headers = {
             'Accept-Language': 'en-US,en;q=0.9',
-            'Content-Type': 'application/json',
             'Origin': 'https://deepinfra.com',
             'Referer': 'https://deepinfra.com/',
             'X-Deepinfra-Source': 'web-page',
-            'accept': 'text/event-stream',
+            **headers
         }
-        async with ClientSession(headers=headers) as session:
-            data = {
-                "model": model,
-                "messages": messages,
-                "stream": True
-            }
-            async with session.post(cls.api_endpoint, json=data, proxy=proxy) as response:
-                await raise_for_status(response)
-                async for chunk in response.content:
-                    if chunk:
-                        chunk_text = chunk.decode(errors="ignore")
-                        try:
-                            # Handle streaming response
-                            if chunk_text.startswith("data: "):
-                                if chunk_text.strip() == "data: [DONE]":
-                                    continue
-                                chunk_data = json.loads(chunk_text[6:])
-                                content = chunk_data["choices"][0]["delta"].get("content")
-                                if content:
-                                    yield content
-                            # Handle non-streaming response
-                            else:
-                                chunk_data = json.loads(chunk_text)
-                                content = chunk_data["choices"][0]["message"].get("content")
-                                if content:
-                                    yield content
-                        except (json.JSONDecodeError, KeyError):
-                            continue
+        async for chunk in super().create_async_generator(model, messages, headers=headers, **kwargs):
+            yield chunk

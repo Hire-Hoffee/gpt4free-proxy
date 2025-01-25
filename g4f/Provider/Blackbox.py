@@ -1,78 +1,28 @@
 from __future__ import annotations
 
 from aiohttp import ClientSession
-import json
-import uuid
+
 import re
-import aiohttp
+import json
+import random
+import string
 from pathlib import Path
-from functools import wraps
-from typing import Optional, Callable, Any
 
 from ..typing import AsyncResult, Messages, ImagesType
+from ..requests.raise_for_status import raise_for_status
 from .base_provider import AsyncGeneratorProvider, ProviderModelMixin
-from .helper import format_prompt
 from ..image import ImageResponse, to_data_uri
 from ..cookies import get_cookies_dir
-from .. import debug
+from .helper import format_prompt
+from ..providers.response import FinishReason, JsonConversation
 
+class Conversation(JsonConversation):
+    validated_value: str = None
+    chat_id: str = None
+    message_history: Messages = []
 
-def cached_value(filename: str, cache_key: str = 'validated_value'):
-    """Universal cache decorator for both memory and file caching"""
-    def decorator(fetch_func: Callable) -> Callable:
-        memory_cache: Optional[str] = None
-        
-        @wraps(fetch_func)
-        async def wrapper(cls, *args, force_refresh=False, **kwargs) -> Any:
-            nonlocal memory_cache
-            
-            # If force refresh, clear caches
-            if force_refresh:
-                memory_cache = None
-                try:
-                    cache_file = Path(get_cookies_dir()) / filename
-                    if cache_file.exists():
-                        cache_file.unlink()
-                except Exception as e:
-                    debug.log(f"Error clearing cache file: {e}")
-            
-            # Check memory cache first
-            if memory_cache is not None:
-                return memory_cache
-            
-            # Check file cache
-            cache_file = Path(get_cookies_dir()) / filename
-            try:
-                if cache_file.exists():
-                    with open(cache_file, 'r') as f:
-                        data = json.load(f)
-                        if data.get(cache_key):
-                            memory_cache = data[cache_key]
-                            return memory_cache
-            except Exception as e:
-                debug.log(f"Error reading cache file: {e}")
-            
-            # Fetch new value
-            try:
-                value = await fetch_func(cls, *args, **kwargs)
-                memory_cache = value
-                
-                # Save to file
-                cache_file.parent.mkdir(exist_ok=True)
-                try:
-                    with open(cache_file, 'w') as f:
-                        json.dump({cache_key: value}, f)
-                except Exception as e:
-                    debug.log(f"Error writing to cache file: {e}")
-                
-                return value
-            except Exception as e:
-                debug.log(f"Error fetching value: {e}")
-                raise
-                
-        return wrapper
-    return decorator
-
+    def __init__(self, model: str):
+        self.model = model
 
 class Blackbox(AsyncGeneratorProvider, ProviderModelMixin):
     label = "Blackbox AI"
@@ -84,10 +34,10 @@ class Blackbox(AsyncGeneratorProvider, ProviderModelMixin):
     supports_system_message = True
     supports_message_history = True
     
-    default_model = 'blackboxai'
+    default_model = "blackboxai"
     default_vision_model = default_model
     default_image_model = 'ImageGeneration' 
-    image_models = [default_image_model]
+    image_models = [default_image_model, "ImageGeneration2"]
     vision_models = [default_vision_model, 'gpt-4o', 'gemini-pro', 'gemini-1.5-flash', 'llama-3.1-8b', 'llama-3.1-70b', 'llama-3.1-405b']
     
     userSelectedModel = ['gpt-4o', 'gemini-pro', 'claude-sonnet-3.5', 'blackboxai-pro']
@@ -95,12 +45,13 @@ class Blackbox(AsyncGeneratorProvider, ProviderModelMixin):
     agentMode = {
         'ImageGeneration': {'mode': True, 'id': "ImageGenerationLV45LJp", 'name': "Image Generation"},
         #
-        'meta-llama/Llama-3.3-70B-Instruct-Turbo': {'mode': True, 'id': "meta-llama/Llama-3.3-70B-Instruct-Turbo", 'name': "Meta-Llama-3.3-70B-Instruct-Turbo"},
-        'mistralai/Mistral-7B-Instruct-v0.2': {'mode': True, 'id': "mistralai/Mistral-7B-Instruct-v0.2", 'name': "Mistral-(7B)-Instruct-v0.2"},
-        'deepseek-ai/deepseek-llm-67b-chat': {'mode': True, 'id': "deepseek-ai/deepseek-llm-67b-chat", 'name': "DeepSeek-LLM-Chat-(67B)"},
-        'databricks/dbrx-instruct': {'mode': True, 'id': "databricks/dbrx-instruct", 'name': "DBRX-Instruct"},
-        'Qwen/QwQ-32B-Preview': {'mode': True, 'id': "Qwen/QwQ-32B-Preview", 'name': "Qwen-QwQ-32B-Preview"},
-        'NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO': {'mode': True, 'id': "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO", 'name': "Nous-Hermes-2-Mixtral-8x7B-DPO"}
+        'Meta-Llama-3.3-70B-Instruct-Turbo': {'mode': True, 'id': "meta-llama/Llama-3.3-70B-Instruct-Turbo", 'name': "Meta-Llama-3.3-70B-Instruct-Turbo"},
+        'Mistral-(7B)-Instruct-v0.': {'mode': True, 'id': "mistralai/Mistral-7B-Instruct-v0.2", 'name': "Mistral-(7B)-Instruct-v0.2"},
+        'DeepSeek-LLM-Chat-(67B)': {'mode': True, 'id': "deepseek-ai/deepseek-llm-67b-chat", 'name': "DeepSeek-LLM-Chat-(67B)"},
+        'DBRX-Instruct': {'mode': True, 'id': "databricks/dbrx-instruct", 'name': "DBRX-Instruct"},
+        'Qwen-QwQ-32B-Preview': {'mode': True, 'id': "Qwen/QwQ-32B-Preview", 'name': "Qwen-QwQ-32B-Preview"},
+        'Nous-Hermes-2-Mixtral-8x7B-DPO': {'mode': True, 'id': "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO", 'name': "Nous-Hermes-2-Mixtral-8x7B-DPO"},
+        'DeepSeek-R1': {'mode': True, 'id': "deepseek-reasoner", 'name': "DeepSeek-R1"}
     }
 
     trendingAgentMode = {
@@ -146,7 +97,7 @@ class Blackbox(AsyncGeneratorProvider, ProviderModelMixin):
         'builder Agent': {'mode': True, 'id': "builder Agent"},
     }
     
-    models = list(dict.fromkeys([default_model, *userSelectedModel, *list(agentMode.keys()), *list(trendingAgentMode.keys())]))
+    models = list(dict.fromkeys([default_model, *userSelectedModel, *image_models, *list(agentMode.keys()), *list(trendingAgentMode.keys())]))
 
     model_aliases = {
         ### chat ###
@@ -154,156 +105,242 @@ class Blackbox(AsyncGeneratorProvider, ProviderModelMixin):
         "gemini-1.5-flash": "gemini-1.5-flash",
         "gemini-1.5-pro": "gemini-pro",
         "claude-3.5-sonnet": "claude-sonnet-3.5",
-        "llama-3.3-70b": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-        "mixtral-7b": "mistralai/Mistral-7B-Instruct-v0.2",
-        "deepseek-chat": "deepseek-ai/deepseek-llm-67b-chat",
-        "dbrx-instruct": "databricks/dbrx-instruct",
-        "qwq-32b": "Qwen/QwQ-32B-Preview",
-        "hermes-2-dpo": "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO",
+        "llama-3.3-70b": "Meta-Llama-3.3-70B-Instruct-Turbo",
+        "mixtral-7b": "Mistral-(7B)-Instruct-v0.",
+        "deepseek-chat": "DeepSeek-LLM-Chat-(67B)",
+        "dbrx-instruct": "DBRX-Instruct",
+        "qwq-32b": "Qwen-QwQ-32B-Preview",
+        "hermes-2-dpo": "Nous-Hermes-2-Mixtral-8x7B-DPO",
+        "deepseek-r1": "DeepSeek-R1",
         
         ### image ###
         "flux": "ImageGeneration",
+        "flux": "ImageGeneration2",
     }
 
     @classmethod
-    @cached_value(filename='blackbox.json')
-    async def get_validated(cls) -> str:
-        """Fetch validated value from website"""
-        async with aiohttp.ClientSession() as session:
-            async with session.get(cls.url) as response:
-                if response.status != 200:
-                    raise RuntimeError("Failed to get validated value")
-                
-                page_content = await response.text()
-                js_files = re.findall(r'static/chunks/\d{4}-[a-fA-F0-9]+\.js', page_content)
-                
-                if not js_files:
-                    js_files = re.findall(r'static/js/[a-zA-Z0-9-]+\.js', page_content)
+    async def fetch_validated(
+        cls,
+        url: str = "https://www.blackbox.ai",
+        force_refresh: bool = False
+    ) -> Optional[str]:
+        """
+        Asynchronously retrieves the validated_value from the specified URL.
+        """
+        cache_file = Path(get_cookies_dir()) / 'blackbox.json'
+        
+        if not force_refresh and cache_file.exists():
+            try:
+                with open(cache_file, 'r') as f:
+                    data = json.load(f)
+                    if data.get('validated_value'):
+                        return data['validated_value']
+            except Exception as e:
+                print(f"Error reading cache: {e}")
+        
+        js_file_pattern = r'static/chunks/\d{4}-[a-fA-F0-9]+\.js'
+        uuid_pattern = r'["\']([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})["\']'
 
-                uuid_format = r'["\']([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})["\']'
+        def is_valid_context(text: str) -> bool:
+            """Checks if the context is valid."""
+            return any(char + '=' in text for char in 'abcdefghijklmnopqrstuvwxyz')
 
-                def is_valid_context(text_around):
-                    return any(char + '=' in text_around for char in 'abcdefghijklmnopqrstuvwxyz')
+        async with ClientSession() as session:
+            try:
+                async with session.get(url) as response:
+                    if response.status != 200:
+                        print("Failed to load the page.")
+                        return None
+
+                    page_content = await response.text()
+                    js_files = re.findall(js_file_pattern, page_content)
 
                 for js_file in js_files:
-                    js_url = f"{cls.url}/_next/{js_file}"
-                    try:
-                        async with session.get(js_url) as js_response:
-                            if js_response.status == 200:
-                                js_content = await js_response.text()
-                                for match in re.finditer(uuid_format, js_content):
-                                    start = max(0, match.start() - 10)
-                                    end = min(len(js_content), match.end() + 10)
-                                    context = js_content[start:end]
+                    js_url = f"{url}/_next/{js_file}"
+                    async with session.get(js_url) as js_response:
+                        if js_response.status == 200:
+                            js_content = await js_response.text()
+                            for match in re.finditer(uuid_pattern, js_content):
+                                start = max(0, match.start() - 10)
+                                end = min(len(js_content), match.end() + 10)
+                                context = js_content[start:end]
+
+                                if is_valid_context(context):
+                                    validated_value = match.group(1)
                                     
-                                    if is_valid_context(context):
-                                        return match.group(1)
-                    except Exception:
-                        continue
-                        
-        raise RuntimeError("Failed to get validated value")
+                                    # Save to cache
+                                    cache_file.parent.mkdir(exist_ok=True)
+                                    try:
+                                        with open(cache_file, 'w') as f:
+                                            json.dump({'validated_value': validated_value}, f)
+                                    except Exception as e:
+                                        print(f"Error writing cache: {e}")
+                                        
+                                    return validated_value
+
+            except Exception as e:
+                print(f"Error retrieving validated_value: {e}")
+
+        return None
+
+    @classmethod
+    def generate_chat_id(cls) -> str:
+        """Generate a random chat ID"""
+        chars = string.ascii_letters + string.digits
+        return ''.join(random.choice(chars) for _ in range(7))
 
     @classmethod
     async def create_async_generator(
         cls,
         model: str,
         messages: Messages,
-        proxy: str = None,
         prompt: str = None,
+        proxy: str = None,
         web_search: bool = False,
         images: ImagesType = None,
         top_p: float = None,
         temperature: float = None,
         max_tokens: int = None,
+        conversation: Conversation = None,
+        return_conversation: bool = False,
         **kwargs
     ) -> AsyncResult:      
+        model = cls.get_model(model)
         headers = {
-            "accept": "*/*",
-            "accept-language": "en-US,en;q=0.9",
-            "content-type": "application/json",
-            "origin": "https://www.blackbox.ai",
-            "referer": "https://www.blackbox.ai/",
-            "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+            'accept': '*/*',
+            'accept-language': 'en-US,en;q=0.9',
+            'content-type': 'application/json',
+            'origin': 'https://www.blackbox.ai',
+            'referer': 'https://www.blackbox.ai/',
+            'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
         }
         
-        model = cls.get_model(model)
-        
-        conversation_id = str(uuid.uuid4())[:7]
-        validated_value = await cls.get_validated()
-        
-        formatted_message = format_prompt(messages)
-            
-        first_message = next((msg for msg in messages if msg['role'] == 'user'), None)
-        current_messages = [{"id": conversation_id, "content": formatted_message, "role": "user"}]
-
-        if images is not None:
-            current_messages[-1]['data'] = {
-                "imagesData": [
-                    {
-                        "filePath": f"/{image_name}",
-                        "contents": to_data_uri(image)
-                    }
-                    for image, image_name in images
-                ],
-                "fileText": "",
-                "title": ""
-            }
-        
-        while True:
-            async with ClientSession(headers=headers) as session:
+        async with ClientSession(headers=headers) as session:
+            if model == "ImageGeneration2":
+                prompt = messages[-1]["content"]
                 data = {
-                    "messages": current_messages,
-                    "id": conversation_id,
-                    "previewToken": None,
-                    "userId": None,
-                    "codeModelMode": True,
-                    "agentMode": cls.agentMode.get(model, {}) if model in cls.agentMode else {},
-                    "trendingAgentMode": cls.trendingAgentMode.get(model, {}) if model in cls.trendingAgentMode else {},
-                    "isMicMode": False,
-                    "userSystemPrompt": None,
-                    "maxTokens": max_tokens,
-                    "playgroundTopP": top_p,
-                    "playgroundTemperature": temperature,
-                    "isChromeExt": False,
-                    "githubToken": "",
-                    "clickedAnswer2": False,
-                    "clickedAnswer3": False,
-                    "clickedForceWebSearch": False,
-                    "visitFromDelta": False,
-                    "mobileClient": False,
-                    "userSelectedModel": model if model in cls.userSelectedModel else None,
-                    "validated": validated_value,
-                    "imageGenerationMode": False,
-                    "webSearchModePrompt": False,
-                    "deepSearchMode": False,
-                    "domains": None,
-                    "webSearchMode": web_search
+                    "query": prompt,
+                    "agentMode": True
                 }
+                headers['content-type'] = 'text/plain;charset=UTF-8'
                 
-                try:
-                    async with session.post(cls.api_endpoint, json=data, proxy=proxy) as response:
-                        response.raise_for_status()
-                        first_chunk = True
-                        content_received = False
-                        async for chunk in response.content:
-                            if chunk:
-                                content_received = True
-                                decoded = chunk.decode()
-                                if first_chunk and "Generated by BLACKBOX.AI" in decoded:
-                                    validated_value = await cls.get_validated(force_refresh=True)
-                                    break
-                                first_chunk = False
-                                if model in cls.image_models and decoded.startswith("![]("):
-                                    image_url = decoded.strip("![]()")
-                                    prompt = messages[-1]["content"]
-                                    yield ImageResponse(images=image_url, alt=prompt)
-                                else:
-                                    yield decoded
-                        else:
-                            if not content_received:
-                                debug.log("Empty response received from Blackbox API, retrying...")
-                                continue
+                async with session.post(
+                    "https://www.blackbox.ai/api/image-generator",
+                    json=data,
+                    proxy=proxy,
+                    headers=headers
+                ) as response:
+                    await raise_for_status(response)
+                    response_json = await response.json()
+                    
+                    if "markdown" in response_json:
+                        image_url_match = re.search(r'!\[.*?\]\((.*?)\)', response_json["markdown"])
+                        if image_url_match:
+                            image_url = image_url_match.group(1)
+                            yield ImageResponse(images=[image_url], alt=prompt)
                             return
-                except Exception as e:
-                    debug.log(f"Error in request: {e}")
-                    raise
+
+            if conversation is None:
+                conversation = Conversation(model)
+                conversation.validated_value = await cls.fetch_validated()
+                conversation.chat_id = cls.generate_chat_id()
+                conversation.message_history = []
+            
+            current_messages = [{"id": conversation.chat_id, "content": format_prompt(messages), "role": "user"}]
+            conversation.message_history.extend(messages)
+
+            if images is not None:
+                current_messages[-1]['data'] = {
+                    "imagesData": [
+                        {
+                            "filePath": f"/{image_name}",
+                            "contents": to_data_uri(image)
+                        }
+                        for image, image_name in images
+                    ],
+                    "fileText": "",
+                    "title": ""
+                }
+
+            data = {
+                "messages": current_messages,
+                "agentMode": cls.agentMode.get(model, {}) if model in cls.agentMode else {},
+                "id": conversation.chat_id,
+                "previewToken": None,
+                "userId": None,
+                "codeModelMode": True,
+                "trendingAgentMode": cls.trendingAgentMode.get(model, {}) if model in cls.trendingAgentMode else {},
+                "isMicMode": False,
+                "userSystemPrompt": None,
+                "maxTokens": max_tokens,
+                "playgroundTopP": top_p,
+                "playgroundTemperature": temperature,
+                "isChromeExt": False,
+                "githubToken": "",
+                "clickedAnswer2": False,
+                "clickedAnswer3": False,
+                "clickedForceWebSearch": False,
+                "visitFromDelta": False,
+                "mobileClient": False,
+                "userSelectedModel": model if model in cls.userSelectedModel else None,
+                "validated": conversation.validated_value,
+                "imageGenerationMode": False,
+                "webSearchModePrompt": False,
+                "deepSearchMode": False,
+                "domains": None,
+                "vscodeClient": False,
+                "codeInterpreterMode": False,
+                "webSearchMode": web_search
+            }
+            
+            async with session.post(cls.api_endpoint, json=data, proxy=proxy) as response:
+                await raise_for_status(response)
+                response_text = await response.text()
+                parts = response_text.split('$~~~$')
+                text_to_yield = parts[2] if len(parts) >= 3 else response_text
+                
+                if not text_to_yield or text_to_yield.isspace():
+                    return
+
+                full_response = ""
+                
+                if model in cls.image_models:
+                    image_url_match = re.search(r'!\[.*?\]\((.*?)\)', text_to_yield)
+                    if image_url_match:
+                        image_url = image_url_match.group(1)
+                        prompt = messages[-1]["content"]
+                        yield ImageResponse(images=[image_url], alt=prompt)
+                else:
+                    if "Generated by BLACKBOX.AI" in text_to_yield:
+                        conversation.validated_value = await cls.fetch_validated(force_refresh=True)
+                        if conversation.validated_value:
+                            data["validated"] = conversation.validated_value
+                            async with session.post(cls.api_endpoint, json=data, proxy=proxy) as new_response:
+                                await raise_for_status(new_response)
+                                new_response_text = await new_response.text()
+                                new_parts = new_response_text.split('$~~~$')
+                                new_text = new_parts[2] if len(new_parts) >= 3 else new_response_text
+                                
+                                if new_text and not new_text.isspace():
+                                    yield new_text
+                                    full_response = new_text
+                        else:
+                            if text_to_yield and not text_to_yield.isspace():
+                                yield text_to_yield
+                                full_response = text_to_yield
+                    else:
+                        if text_to_yield and not text_to_yield.isspace():
+                            yield text_to_yield
+                            full_response = text_to_yield
+
+                    if full_response:
+                        if max_tokens and len(full_response) >= max_tokens:
+                            reason = "length"
+                        else:
+                            reason = "stop"
+                        
+                        if return_conversation:
+                            conversation.message_history.append({"role": "assistant", "content": full_response})
+                            yield conversation
+                        
+                        yield FinishReason(reason)

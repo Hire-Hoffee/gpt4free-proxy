@@ -303,12 +303,13 @@ class Backend_Api(Api):
 
     def get_provider_models(self, provider: str):
         api_key = request.headers.get("x_api_key")
-        models = super().get_provider_models(provider, api_key)
+        api_base = request.headers.get("x_api_base")
+        models = super().get_provider_models(provider, api_key, api_base)
         if models is None:
             return "Provider not found", 404
         return models
 
-    def _format_json(self, response_type: str, content) -> str:
+    def _format_json(self, response_type: str, content = None, **kwargs) -> str:
         """
         Formats and returns a JSON response.
 
@@ -319,4 +320,4 @@ class Backend_Api(Api):
         Returns:
             str: A JSON formatted string.
         """
-        return json.dumps(super()._format_json(response_type, content)) + "\n"
+        return json.dumps(super()._format_json(response_type, content, **kwargs)) + "\n"
