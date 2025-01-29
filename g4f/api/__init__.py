@@ -73,7 +73,7 @@ def create_app():
     api.register_validation_exception_handler()
  
     if AppConfig.gui:
-        gui_app = WSGIMiddleware(get_gui_app())
+        gui_app = WSGIMiddleware(get_gui_app(AppConfig.demo))
         app.mount("/", gui_app)
 
     # Read cookie files if not ignored
@@ -94,6 +94,12 @@ def create_app_debug():
 def create_app_with_gui_and_debug():
     g4f.debug.logging = True
     AppConfig.gui = True
+    return create_app()
+
+def create_app_with_demo_and_debug():
+    g4f.debug.logging = True
+    AppConfig.gui = True
+    AppConfig.demo = True
     return create_app()
 
 class ErrorResponse(Response):
@@ -121,6 +127,7 @@ class AppConfig:
     image_provider: str = None
     proxy: str = None
     gui: bool = False
+    demo: bool = False
 
     @classmethod
     def set_config(cls, **data):
@@ -156,18 +163,18 @@ class Api:
             print(f"Register authentication key: {''.join(['*' for _ in range(len(AppConfig.g4f_api_key))])}")
         @self.app.middleware("http")
         async def authorization(request: Request, call_next):
-            if AppConfig.g4f_api_key is not None:
+            if AppConfig.g4f_api_key is not None or AppConfig.demo:
                 try:
                     user_g4f_api_key = await self.get_g4f_api_key(request)
                 except HTTPException:
                     user_g4f_api_key = None
                 path = request.url.path
-                if path.startswith("/v1"):
+                if path.startswith("/v1") or path.startswith("/api/") or (AppConfig.demo and path == '/backend-api/v2/upload_cookies'):
                     if user_g4f_api_key is None:
                         return ErrorResponse.from_message("G4F API key required", HTTP_401_UNAUTHORIZED)
                     if not secrets.compare_digest(AppConfig.g4f_api_key, user_g4f_api_key):
                         return ErrorResponse.from_message("Invalid G4F API key", HTTP_403_FORBIDDEN)
-                else:
+                elif not AppConfig.demo:
                     if user_g4f_api_key is not None and path.startswith("/images/"):
                         if not secrets.compare_digest(AppConfig.g4f_api_key, user_g4f_api_key):
                             return ErrorResponse.from_message("Invalid G4F API key", HTTP_403_FORBIDDEN)
@@ -236,6 +243,31 @@ class Api:
                 } for provider_name, provider in g4f.Provider.ProviderUtils.convert.items()
                     if provider.working and provider_name != "Custom"
                 ]
+            }
+
+        @self.app.get("/api/{provider}/models", responses={
+            HTTP_200_OK: {"model": List[ModelResponseModel]},
+        })
+        async def models(provider: str, credentials: Annotated[HTTPAuthorizationCredentials, Depends(Api.security)] = None):
+            if provider not in ProviderUtils.convert:
+                return ErrorResponse.from_message("The provider does not exist.", 404)
+            provider: ProviderType = ProviderUtils.convert[provider]
+            if not hasattr(provider, "get_models"):
+                models = []
+            elif credentials is not None:
+                models = provider.get_models(api_key=credentials.credentials)
+            else:
+                models = provider.get_models()
+            return {
+                "object": "list",
+                "data": [{
+                    "id": model,
+                    "object": "model",
+                    "created": 0,
+                    "owned_by": getattr(provider, "label", provider.__name__),
+                    "image": model in getattr(provider, "image_models", []),
+                    "vision": model in getattr(provider, "vision_models", []),
+                } for model in models]
             }
 
         @self.app.get("/v1/models/{model_name}", responses={
@@ -344,6 +376,20 @@ class Api:
             except Exception as e:
                 logger.exception(e)
                 return ErrorResponse.from_exception(e, config, HTTP_500_INTERNAL_SERVER_ERROR)
+
+        @self.app.post("/api/{provider}/chat/completions", responses={
+            HTTP_200_OK: {"model": ChatCompletion},
+            HTTP_401_UNAUTHORIZED: {"model": ErrorResponseModel},
+            HTTP_404_NOT_FOUND: {"model": ErrorResponseModel},
+            HTTP_422_UNPROCESSABLE_ENTITY: {"model": ErrorResponseModel},
+            HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponseModel},
+        })
+        async def provider_chat_completions(
+            provider: str,
+            config: ChatCompletionsConfig,
+            credentials: Annotated[HTTPAuthorizationCredentials, Depends(Api.security)] = None,
+        ):
+            return await chat_completions(config, credentials, provider)
 
         responses = {
             HTTP_200_OK: {"model": ImagesResponse},
@@ -562,7 +608,9 @@ def run_api(
         host, port = bind.split(":")
     if port is None:
         port = DEFAULT_PORT
-    if AppConfig.gui and debug:
+    if AppConfig.demo and debug:
+        method = "create_app_with_demo_and_debug"
+    elif AppConfig.gui and debug:
         method = "create_app_with_gui_and_debug"
     else:
         method = "create_app_debug" if debug else "create_app"

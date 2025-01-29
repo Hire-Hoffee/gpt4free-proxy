@@ -6,12 +6,20 @@ import os
 import logging
 import asyncio
 import shutil
-from flask import Flask, Response, request, jsonify
+import random
+import datetime
+from flask import Flask, Response, request, jsonify, render_template
 from typing import Generator
 from pathlib import Path
 from urllib.parse import quote_plus
 from hashlib import sha256
 from werkzeug.utils import secure_filename
+try:
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+    has_flask_limiter = True
+except ImportError:
+    has_flask_limiter = False
 
 from ...image import is_allowed_extension, to_image
 from ...client.service import convert_to_provider
@@ -22,6 +30,7 @@ from ...tools.run_tools import iter_run_tools
 from ...errors import ProviderNotFoundError
 from ...cookies import get_cookies_dir
 from ... import ChatCompletion
+from ... import models
 from .api import Api
 
 logger = logging.getLogger(__name__)
@@ -53,52 +62,168 @@ class Backend_Api(Api):
         """
         self.app: Flask = app
 
+        if has_flask_limiter and app.demo:
+            limiter = Limiter(
+                get_remote_address,
+                app=app,
+                default_limits=["200 per day", "50 per hour"],
+                storage_uri="memory://",
+                auto_check=False,
+                strategy="moving-window",
+            )
+
+        if has_flask_limiter and app.demo:
+            @app.route('/', methods=['GET'])
+            @limiter.exempt
+            def home():
+                return render_template('demo.html')
+        else:
+            @app.route('/', methods=['GET'])
+            def home():
+                return render_template('home.html')
+
+        @app.route('/backend-api/v2/models', methods=['GET'])
         def jsonify_models(**kwargs):
-            response = self.get_models(**kwargs)
+            response = get_demo_models() if app.demo else self.get_models(**kwargs)
             if isinstance(response, list):
                 return jsonify(response)
             return response
 
+        @app.route('/backend-api/v2/models/<provider>', methods=['GET'])
         def jsonify_provider_models(**kwargs):
             response = self.get_provider_models(**kwargs)
             if isinstance(response, list):
                 return jsonify(response)
             return response
 
+        @app.route('/backend-api/v2/providers', methods=['GET'])
         def jsonify_providers(**kwargs):
             response = self.get_providers(**kwargs)
             if isinstance(response, list):
                 return jsonify(response)
             return response
 
+        def get_demo_models():
+            return [{
+                "name": model.name,
+                "image": isinstance(model, models.ImageModel),
+                "vision": isinstance(model, models.VisionModel),
+                "providers": [
+                    getattr(provider, "parent", provider.__name__)
+                    for provider in providers
+                ],
+                "demo": True
+            }
+            for model, providers in models.demo_models.values()]
+
+        def handle_conversation():
+            """
+            Handles conversation requests and streams responses back.
+
+            Returns:
+                Response: A Flask response object for streaming.
+            """
+            kwargs = {}
+            if "files[]" in request.files:
+                images = []
+                for file in request.files.getlist('files[]'):
+                    if file.filename != '' and is_allowed_extension(file.filename):
+                        images.append((to_image(file.stream, file.filename.endswith('.svg')), file.filename))
+                kwargs['images'] = images
+            if "json" in request.form:
+                json_data = json.loads(request.form['json'])
+            else:
+                json_data = request.json
+
+            if app.demo and json_data.get("provider") not in ["Custom", "Feature"]:
+                model = json_data.get("model")
+                if model != "default" and model in models.demo_models:
+                    json_data["provider"] = random.choice(models.demo_models[model][1])
+                else:
+                    json_data["model"] = models.demo_models["default"][0].name
+                    json_data["provider"] = random.choice(models.demo_models["default"][1])
+
+            kwargs = self._prepare_conversation_kwargs(json_data, kwargs)
+            return self.app.response_class(
+                self._create_response_stream(
+                    kwargs,
+                    json_data.get("conversation_id"),
+                    json_data.get("provider"),
+                    json_data.get("download_images", True),
+                ),
+                mimetype='text/event-stream'
+            )
+
+        if has_flask_limiter and app.demo:
+            @app.route('/backend-api/v2/conversation', methods=['POST'])
+            @limiter.limit("4 per minute") # 1 request in 15 seconds
+            def _handle_conversation():
+                limiter.check()
+                return handle_conversation()
+        else:
+            @app.route('/backend-api/v2/conversation', methods=['POST'])
+            def _handle_conversation():
+                return handle_conversation()
+
+        @app.route('/backend-api/v2/usage', methods=['POST'])
+        def add_usage():
+            cache_dir = Path(get_cookies_dir()) / ".usage"
+            cache_file = cache_dir / f"{datetime.date.today()}.jsonl"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            with cache_file.open("a" if cache_file.exists() else "w") as f:
+                f.write(f"{json.dumps(request.json)}\n")
+            return {}
+
+        @app.route('/backend-api/v2/log', methods=['POST'])
+        def add_log():
+            cache_dir = Path(get_cookies_dir()) / ".logging"
+            cache_file = cache_dir / f"{datetime.date.today()}.jsonl"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            data = {"origin": request.headers.get("origin"), **request.json}
+            with cache_file.open("a" if cache_file.exists() else "w") as f:
+                f.write(f"{json.dumps(data)}\n")
+            return {}
+
+        @app.route('/backend-api/v2/memory/<user_id>', methods=['POST'])
+        def add_memory(user_id: str):
+            api_key = request.headers.get("x_api_key")
+            json_data = request.json
+            from mem0 import MemoryClient
+            client = MemoryClient(api_key=api_key)
+            client.add(
+                [{"role": item["role"], "content": item["content"]} for item in json_data.get("items")],
+                user_id=user_id,
+                metadata={"conversation_id": json_data.get("id")}
+            )
+            return {"count": len(json_data.get("items"))}
+
+        @app.route('/backend-api/v2/memory/<user_id>', methods=['GET'])
+        def read_memory(user_id: str):
+            api_key = request.headers.get("x_api_key")
+            from mem0 import MemoryClient
+            client = MemoryClient(api_key=api_key)
+            if request.args.get("search"):
+                return client.search(
+                    request.args.get("search"),
+                    user_id=user_id,
+                    filters=json.loads(request.args.get("filters", "null")),
+                    metadata=json.loads(request.args.get("metadata", "null"))
+                )
+            return client.get_all(
+                user_id=user_id,
+                page=request.args.get("page", 1),
+                page_size=request.args.get("page_size", 100),
+                filters=json.loads(request.args.get("filters", "null")),
+            )
+
         self.routes = {
-            '/backend-api/v2/models': {
-                'function': jsonify_models,
-                'methods': ['GET']
-            },
-            '/backend-api/v2/models/<provider>': {
-                'function': jsonify_provider_models,
-                'methods': ['GET']
-            },
-            '/backend-api/v2/providers': {
-                'function': jsonify_providers,
-                'methods': ['GET']
-            },
             '/backend-api/v2/version': {
                 'function': self.get_version,
                 'methods': ['GET']
             },
-            '/backend-api/v2/conversation': {
-                'function': self.handle_conversation,
-                'methods': ['POST']
-            },
             '/backend-api/v2/synthesize/<provider>': {
                 'function': self.handle_synthesize,
                 'methods': ['GET']
-            },
-            '/backend-api/v2/upload_cookies': {
-                'function': self.upload_cookies,
-                'methods': ['POST']
             },
             '/images/<path:name>': {
                 'function': self.serve_images,
@@ -153,7 +278,8 @@ class Backend_Api(Api):
                     return Response(filter_markdown(response, do_filter_markdown), mimetype='text/plain')
                 def cast_str():
                     for chunk in response:
-                        yield str(chunk)
+                        if not isinstance(chunk, Exception):
+                            yield str(chunk)
                 return Response(cast_str(), mimetype='text/plain')
             except Exception as e:
                 logger.exception(e)
@@ -238,49 +364,18 @@ class Backend_Api(Api):
             except Exception as e:
                 return jsonify({"error": {"message": f"Error uploading file: {str(e)}"}}), 500
 
-    def upload_cookies(self):
-        file = None
-        if "file" in request.files:
-            file = request.files['file']
-            if file.filename == '':
-                return 'No selected file', 400
-        if file and file.filename.endswith(".json") or file.filename.endswith(".har"):
-            filename = secure_filename(file.filename)
-            file.save(os.path.join(get_cookies_dir(), filename))
-            return "File saved", 200
-        return 'Not supported file', 400
-
-    def handle_conversation(self):
-        """
-        Handles conversation requests and streams responses back.
-
-        Returns:
-            Response: A Flask response object for streaming.
-        """
-        
-        kwargs = {}
-        if "files[]" in request.files:
-            images = []
-            for file in request.files.getlist('files[]'):
-                if file.filename != '' and is_allowed_extension(file.filename):
-                    images.append((to_image(file.stream, file.filename.endswith('.svg')), file.filename))
-            kwargs['images'] = images
-        if "json" in request.form:
-            json_data = json.loads(request.form['json'])
-        else:
-            json_data = request.json
-
-        kwargs = self._prepare_conversation_kwargs(json_data, kwargs)
-
-        return self.app.response_class(
-            self._create_response_stream(
-                kwargs,
-                json_data.get("conversation_id"),
-                json_data.get("provider"),
-                json_data.get("download_images", True),
-            ),
-            mimetype='text/event-stream'
-        )
+        @app.route('/backend-api/v2/upload_cookies', methods=['POST'])
+        def upload_cookies(self):
+            file = None
+            if "file" in request.files:
+                file = request.files['file']
+                if file.filename == '':
+                    return 'No selected file', 400
+            if file and file.filename.endswith(".json") or file.filename.endswith(".har"):
+                filename = secure_filename(file.filename)
+                file.save(os.path.join(get_cookies_dir(), filename))
+                return "File saved", 200
+            return 'Not supported file', 400
 
     def handle_synthesize(self, provider: str):
         try:

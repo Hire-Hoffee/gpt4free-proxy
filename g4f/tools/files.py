@@ -225,9 +225,9 @@ def cache_stream(stream: Iterator[str], bucket_dir: Path) -> Iterator[str]:
         for chunk in read_path_chunked(cache_file):
             yield chunk
         return
-    with open(tmp_file, "w") as f:
+    with open(tmp_file, "wb") as f:
         for chunk in stream:
-            f.write(chunk)
+            f.write(chunk.encode(errors="replace"))
             yield chunk
     tmp_file.rename(cache_file)
 
@@ -481,18 +481,21 @@ def get_downloads_urls(bucket_dir: Path, delete_files: bool = False) -> Iterator
         if isinstance(data, list):
             for item in data:
                 if "url" in item:
-                    yield item["url"]
+                    yield {"urls": [item.pop("url")], **item}
+                elif "urls" in item:
+                    yield item
 
 def read_and_download_urls(bucket_dir: Path, event_stream: bool = False) -> Iterator[str]:
     urls = get_downloads_urls(bucket_dir)
     if urls:
         count = 0
         with open(os.path.join(bucket_dir, FILE_LIST), 'a') as f:
-            for filename in to_sync_generator(download_urls(bucket_dir, urls)):
-                f.write(f"{filename}\n")
-                if event_stream:
-                    count += 1
-                    yield f'data: {json.dumps({"action": "download", "count": count})}\n\n'
+            for url in urls:
+                for filename in to_sync_generator(download_urls(bucket_dir, **url)):
+                    f.write(f"{filename}\n")
+                    if event_stream:
+                        count += 1
+                        yield f'data: {json.dumps({"action": "download", "count": count})}\n\n'
 
 async def async_read_and_download_urls(bucket_dir: Path, event_stream: bool = False) -> AsyncIterator[str]:
     urls = get_downloads_urls(bucket_dir)

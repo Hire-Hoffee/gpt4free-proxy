@@ -58,6 +58,7 @@ class Gemini(AsyncGeneratorProvider, ProviderModelMixin):
     
     needs_auth = True
     working = True
+    use_nodriver = True
     
     default_model = 'gemini'
     default_image_model = default_model
@@ -78,16 +79,19 @@ class Gemini(AsyncGeneratorProvider, ProviderModelMixin):
                 print("Skip nodriver login in Gemini provider")
             return
         browser = await get_nodriver(proxy=proxy, user_data_dir="gemini")
-        login_url = os.environ.get("G4F_LOGIN_URL")
-        if login_url:
-            yield RequestLogin(cls.label, login_url)
-        page = await browser.get(f"{cls.url}/app")
-        await page.select("div.ql-editor.textarea", 240)
-        cookies = {}
-        for c in await page.send(nodriver.cdp.network.get_cookies([cls.url])):
-            cookies[c.name] = c.value
-        await page.close()
-        cls._cookies = cookies
+        try:
+            login_url = os.environ.get("G4F_LOGIN_URL")
+            if login_url:
+                yield RequestLogin(cls.label, login_url)
+            page = await browser.get(f"{cls.url}/app")
+            await page.select("div.ql-editor.textarea", 240)
+            cookies = {}
+            for c in await page.send(nodriver.cdp.network.get_cookies([cls.url])):
+                cookies[c.name] = c.value
+            await page.close()
+            cls._cookies = cookies
+        finally:
+            browser.stop()
 
     @classmethod
     async def create_async_generator(

@@ -70,6 +70,8 @@ def iter_response(
             continue
         elif isinstance(chunk, SynthesizeData) or not chunk:
             continue
+        elif isinstance(chunk, Exception):
+            continue
 
         chunk = str(chunk)
         content += chunk
@@ -148,6 +150,8 @@ async def async_iter_response(
                 usage = chunk
                 continue
             elif isinstance(chunk, SynthesizeData) or not chunk:
+                continue
+            elif isinstance(chunk, Exception):
                 continue
 
             chunk = str(chunk)
@@ -241,16 +245,17 @@ class Completions:
         ignore_stream: Optional[bool] = False,
         **kwargs
     ) -> ChatCompletion:
+        if image is not None:
+            kwargs["images"] = [(image, image_name)]
         model, provider = get_model_and_provider(
             model,
             self.provider if provider is None else provider,
             stream,
             ignore_working,
             ignore_stream,
+            has_images="images" in kwargs
         )
         stop = [stop] if isinstance(stop, str) else stop
-        if image is not None:
-            kwargs["images"] = [(image, image_name)]
         if ignore_stream:
             kwargs["ignore_stream"] = True
 
@@ -526,21 +531,22 @@ class AsyncCompletions:
         ignore_stream: Optional[bool] = False,
         **kwargs
     ) -> Awaitable[ChatCompletion]:
+        if image is not None:
+            kwargs["images"] = [(image, image_name)]
         model, provider = get_model_and_provider(
             model,
             self.provider if provider is None else provider,
             stream,
             ignore_working,
             ignore_stream,
+            has_images="images" in kwargs,
         )
         stop = [stop] if isinstance(stop, str) else stop
-        if image is not None:
-            kwargs["images"] = [(image, image_name)]
         if ignore_stream:
             kwargs["ignore_stream"] = True
             
         response = async_iter_run_tools(
-            provider.get_async_create_function(),
+            provider,
             model,
             messages,
             stream=stream,

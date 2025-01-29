@@ -379,6 +379,8 @@ class RaiseErrorMixin():
                 raise ResponseError(data["error"]["message"])
             else:
                 raise ResponseError(data["error"])
+        elif ("choices" not in data or not data["choices"]) and "data" not in data:
+            raise ResponseError(f"Invalid response: {json.dumps(data)}")
 
 class AsyncAuthedProvider(AsyncGeneratorProvider):
 
@@ -422,25 +424,19 @@ class AsyncAuthedProvider(AsyncGeneratorProvider):
                     auth_result = AuthResult(**json.load(f))
             else:
                 auth_result = cls.on_auth(**kwargs)
-            try:
                 for chunk in auth_result:
                     if hasattr(chunk, "get_dict"):
                         auth_result = chunk
                     else:
                         yield chunk
-            except TypeError:
-                pass
             yield from to_sync_generator(cls.create_authed(model, messages, auth_result, **kwargs))
         except (MissingAuthError, NoValidHarFileError):
             auth_result = cls.on_auth(**kwargs)
-            try:
-                for chunk in auth_result:
-                    if hasattr(chunk, "get_dict"):
-                        auth_result = chunk
-                    else:
-                        yield chunk
-            except TypeError:
-                pass
+            for chunk in auth_result:
+                if hasattr(chunk, "get_dict"):
+                    auth_result = chunk
+                else:
+                    yield chunk
             yield from to_sync_generator(cls.create_authed(model, messages, auth_result, **kwargs))
         finally:
                 if hasattr(auth_result, "get_dict"):
@@ -465,14 +461,11 @@ class AsyncAuthedProvider(AsyncGeneratorProvider):
                     auth_result = AuthResult(**json.load(f))
             else:
                 auth_result = cls.on_auth_async(**kwargs)
-                if hasattr(auth_result, "_aiter__"):
-                    async for chunk in auth_result:
-                        if isinstance(chunk, AsyncResult):
-                            auth_result = chunk
-                        else:
-                            yield chunk
-                else:
-                    auth_result = await auth_result
+                async for chunk in auth_result:
+                    if hasattr(chunk, "get_dict"):
+                        auth_result = chunk
+                    else:
+                        yield chunk
             response = to_async_iterator(cls.create_authed(model, messages, **kwargs, auth_result=auth_result))
             async for chunk in response:
                 yield chunk
@@ -480,14 +473,11 @@ class AsyncAuthedProvider(AsyncGeneratorProvider):
             if cache_file.exists():
                 cache_file.unlink()
             auth_result = cls.on_auth_async(**kwargs)
-            if hasattr(auth_result, "_aiter__"):
-                async for chunk in auth_result:
-                    if isinstance(chunk, AsyncResult):
-                        auth_result = chunk
-                    else:
-                        yield chunk
-            else:
-                auth_result = await auth_result
+            async for chunk in auth_result:
+                if hasattr(chunk, "get_dict"):
+                    auth_result = chunk
+                else:
+                    yield chunk
             response = to_async_iterator(cls.create_authed(model, messages, **kwargs, auth_result=auth_result))
             async for chunk in response:
                 yield chunk

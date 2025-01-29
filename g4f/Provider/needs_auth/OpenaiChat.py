@@ -91,14 +91,16 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
     label = "OpenAI ChatGPT"
     url = "https://chatgpt.com"
     working = True
+    use_nodriver = True
     supports_gpt_4 = True
     supports_message_history = True
     supports_system_message = True
     default_model = "auto"
     default_image_model = "dall-e-3"
     image_models = [default_image_model]
-    fallback_models = [default_model, "gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4o-canmore", "o1", "o1-preview", "o1-mini"] +image_models
-    vision_models = fallback_models
+    text_models = [default_model, "gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-4o-canmore", "o1", "o1-preview", "o1-mini"]
+    vision_models = text_models
+    models = text_models + image_models
     synthesize_content_type = "audio/mpeg"
 
     _api_key: str = None
@@ -118,33 +120,6 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
             proof_token=RequestConfig.proof_token,
             turnstile_token=RequestConfig.turnstile_token
         )
-
-    @classmethod
-    def get_models(cls, proxy: str = None, timeout: int = 180) -> List[str]:
-        if not cls.models:
-            # try:
-            #     headers = {
-            #         **(cls.get_default_headers() if cls._headers is None else cls._headers),
-            #         "accept":  "application/json",
-            #     }
-            #     with Session(
-            #         proxy=proxy,
-            #         impersonate="chrome",
-            #         timeout=timeout,
-            #         headers=headers
-            #     ) as session:
-            #         response = session.get(
-            #              f"{cls.url}/backend-anon/models"
-            #             if cls._api_key is None else
-            #             f"{cls.url}/backend-api/models"
-            #         )
-            #         raise_for_status(response)
-            #         data = response.json()
-            #         cls.models = [model.get("slug") for model in data.get("models")]
-            # except Exception as e:
-            #     debug.log(f"OpenaiChat: Failed to get models: {type(e).__name__}: {e}")
-            cls.models = cls.fallback_models
-        return cls.models
 
     @classmethod
     async def upload_images(
@@ -473,6 +448,8 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
                                 buffer = ""
                             else:
                                 yield chunk
+                        if conversation.finish_reason is not None:
+                            break
                 if sources.list:
                     yield sources
                 if return_conversation:
@@ -622,53 +599,56 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
     @classmethod
     async def nodriver_auth(cls, proxy: str = None):
         browser = await get_nodriver(proxy=proxy)
-        page = browser.main_tab
-        def on_request(event: nodriver.cdp.network.RequestWillBeSent):
-            if event.request.url == start_url or event.request.url.startswith(conversation_url):
-                RequestConfig.headers = event.request.headers
-            elif event.request.url in (backend_url, backend_anon_url):
-                if "OpenAI-Sentinel-Proof-Token" in event.request.headers:
-                        RequestConfig.proof_token = json.loads(base64.b64decode(
-                            event.request.headers["OpenAI-Sentinel-Proof-Token"].split("gAAAAAB", 1)[-1].encode()
-                        ).decode())
-                if "OpenAI-Sentinel-Turnstile-Token" in event.request.headers:
-                    RequestConfig.turnstile_token = event.request.headers["OpenAI-Sentinel-Turnstile-Token"]
-                if "Authorization" in event.request.headers:
-                    cls._api_key = event.request.headers["Authorization"].split()[-1]
-            elif event.request.url == arkose_url:
-                RequestConfig.arkose_request = arkReq(
-                    arkURL=event.request.url,
-                    arkBx=None,
-                    arkHeader=event.request.headers,
-                    arkBody=event.request.post_data,
-                    userAgent=event.request.headers.get("User-Agent")
-                )
-        await page.send(nodriver.cdp.network.enable())
-        page.add_handler(nodriver.cdp.network.RequestWillBeSent, on_request)
-        page = await browser.get(cls.url)
-        user_agent = await page.evaluate("window.navigator.userAgent")
-        await page.select("#prompt-textarea", 240)
-        await page.evaluate("document.getElementById('prompt-textarea').innerText = 'Hello'")
-        await page.evaluate("document.querySelector('[data-testid=\"send-button\"]').click()")
-        while True:
-            if cls._api_key is not None or not cls.needs_auth:
-                break
-            body = await page.evaluate("JSON.stringify(window.__remixContext)")
-            if body:
-                match = re.search(r'"accessToken":"(.*?)"', body)
-                if match:
-                    cls._api_key = match.group(1)
+        try:
+            page = browser.main_tab
+            def on_request(event: nodriver.cdp.network.RequestWillBeSent):
+                if event.request.url == start_url or event.request.url.startswith(conversation_url):
+                    RequestConfig.headers = event.request.headers
+                elif event.request.url in (backend_url, backend_anon_url):
+                    if "OpenAI-Sentinel-Proof-Token" in event.request.headers:
+                            RequestConfig.proof_token = json.loads(base64.b64decode(
+                                event.request.headers["OpenAI-Sentinel-Proof-Token"].split("gAAAAAB", 1)[-1].encode()
+                            ).decode())
+                    if "OpenAI-Sentinel-Turnstile-Token" in event.request.headers:
+                        RequestConfig.turnstile_token = event.request.headers["OpenAI-Sentinel-Turnstile-Token"]
+                    if "Authorization" in event.request.headers:
+                        cls._api_key = event.request.headers["Authorization"].split()[-1]
+                elif event.request.url == arkose_url:
+                    RequestConfig.arkose_request = arkReq(
+                        arkURL=event.request.url,
+                        arkBx=None,
+                        arkHeader=event.request.headers,
+                        arkBody=event.request.post_data,
+                        userAgent=event.request.headers.get("User-Agent")
+                    )
+            await page.send(nodriver.cdp.network.enable())
+            page.add_handler(nodriver.cdp.network.RequestWillBeSent, on_request)
+            page = await browser.get(cls.url)
+            user_agent = await page.evaluate("window.navigator.userAgent")
+            await page.select("#prompt-textarea", 240)
+            await page.evaluate("document.getElementById('prompt-textarea').innerText = 'Hello'")
+            await page.evaluate("document.querySelector('[data-testid=\"send-button\"]').click()")
+            while True:
+                if cls._api_key is not None or not cls.needs_auth:
                     break
-            await asyncio.sleep(1)
-        while True:
-            if RequestConfig.proof_token:
-                break
-            await asyncio.sleep(1)
-        RequestConfig.data_build = await page.evaluate("document.documentElement.getAttribute('data-build')")
-        RequestConfig.cookies = await page.send(get_cookies([cls.url]))
-        await page.close()
-        cls._create_request_args(RequestConfig.cookies, RequestConfig.headers, user_agent=user_agent)
-        cls._set_api_key(cls._api_key)
+                body = await page.evaluate("JSON.stringify(window.__remixContext)")
+                if body:
+                    match = re.search(r'"accessToken":"(.*?)"', body)
+                    if match:
+                        cls._api_key = match.group(1)
+                        break
+                await asyncio.sleep(1)
+            while True:
+                if RequestConfig.proof_token:
+                    break
+                await asyncio.sleep(1)
+            RequestConfig.data_build = await page.evaluate("document.documentElement.getAttribute('data-build')")
+            RequestConfig.cookies = await page.send(get_cookies([cls.url]))
+            await page.close()
+            cls._create_request_args(RequestConfig.cookies, RequestConfig.headers, user_agent=user_agent)
+            cls._set_api_key(cls._api_key)
+        finally:
+            browser.stop()
 
     @staticmethod
     def get_default_headers() -> Dict[str, str]:

@@ -1,19 +1,12 @@
 from __future__ import annotations
 
 from ..typing import AsyncResult, Messages
-from .needs_auth import OpenaiAPI
+from .needs_auth.OpenaiTemplate import OpenaiTemplate
 
-class DeepInfraChat(OpenaiAPI):
-    label = __name__
+class DeepInfraChat(OpenaiTemplate):
     url = "https://deepinfra.com/chat"
-    login_url = None
-    needs_auth = False
     api_base = "https://api.deepinfra.com/v1/openai"
-
     working = True
-    supports_stream = True
-    supports_system_message = True
-    supports_message_history = True
 
     default_model = 'meta-llama/Llama-3.3-70B-Instruct-Turbo'
     models = [
@@ -21,6 +14,7 @@ class DeepInfraChat(OpenaiAPI):
         'meta-llama/Meta-Llama-3.1-8B-Instruct',
         default_model,
         'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
+        'deepseek-ai/DeepSeek-V3',
         'Qwen/QwQ-32B-Preview',
         'microsoft/WizardLM-2-8x22B',
         'microsoft/WizardLM-2-7B',
@@ -33,10 +27,11 @@ class DeepInfraChat(OpenaiAPI):
         "llama-3.1-8b": "meta-llama/Meta-Llama-3.1-8B-Instruct",
         "llama-3.3-70b": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
         "llama-3.1-70b": "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
+        "deepseek-chat": "deepseek-ai/DeepSeek-V3",
         "qwq-32b": "Qwen/QwQ-32B-Preview",
         "wizardlm-2-8x22b": "microsoft/WizardLM-2-8x22B",
         "wizardlm-2-7b": "microsoft/WizardLM-2-7B",
-        "qwen-2-72b": "Qwen/Qwen2.5-72B-Instruct",
+        "qwen-2.5-72b": "Qwen/Qwen2.5-72B-Instruct",
         "qwen-2.5-coder-32b": "Qwen/Qwen2.5-Coder-32B-Instruct",
         "nemotron-70b": "nvidia/Llama-3.1-Nemotron-70B-Instruct",
     }

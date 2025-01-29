@@ -8,10 +8,6 @@ class Website:
     def __init__(self, app) -> None:
         self.app = app
         self.routes = {
-            '/': {
-                'function': self._home,
-                'methods': ['GET', 'POST']
-            },
             '/chat/': {
                 'function': self._index,
                 'methods': ['GET', 'POST']
@@ -20,12 +16,12 @@ class Website:
                 'function': self._chat,
                 'methods': ['GET', 'POST']
             },
-            '/menu/': {
+            '/chat/menu/': {
                 'function': redirect_home,
                 'methods': ['GET', 'POST']
             },
-            '/settings/': {
-                'function': redirect_home,
+            '/chat/settings/': {
+                'function': self._settings,
                 'methods': ['GET', 'POST']
             },
             '/images/': {
@@ -42,5 +38,5 @@ class Website:
     def _index(self):
         return render_template('index.html', chat_id=str(uuid.uuid4()))
 
-    def _home(self):
-        return render_template('home.html')
+    def _settings(self):
+        return render_template('index.html', chat_id=str(uuid.uuid4()))

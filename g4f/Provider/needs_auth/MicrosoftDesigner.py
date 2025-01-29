@@ -21,6 +21,7 @@ class MicrosoftDesigner(AsyncGeneratorProvider, ProviderModelMixin):
     label = "Microsoft Designer"
     url = "https://designer.microsoft.com"
     working = True
+    use_nodriver = True
     needs_auth = True
     default_image_model = "dall-e-3"
     image_models = [default_image_model, "1024x1024", "1024x1792", "1792x1024"]
@@ -143,25 +144,28 @@ def readHAR(url: str) -> tuple[str, str]:
 
 async def get_access_token_and_user_agent(url: str, proxy: str = None):
     browser = await get_nodriver(proxy=proxy, user_data_dir="designer")
-    page = await browser.get(url)
-    user_agent = await page.evaluate("navigator.userAgent")
-    access_token = None
-    while access_token is None:
-        access_token = await page.evaluate("""
-            (() => {
-                for (var i = 0; i < localStorage.length; i++) {
-                    try {
-                        item = JSON.parse(localStorage.getItem(localStorage.key(i)));
-                        if (item.credentialType == "AccessToken" 
-                            && item.expiresOn > Math.floor(Date.now() / 1000)
-                            && item.target.includes("designerappservice")) {
-                            return item.secret;
-                        }
-                    } catch(e) {}
-                }
-            })()
-        """)
-        if access_token is None:
-            await asyncio.sleep(1)
-    await page.close()
-    return access_token, user_agent
+    try:
+        page = await browser.get(url)
+        user_agent = await page.evaluate("navigator.userAgent")
+        access_token = None
+        while access_token is None:
+            access_token = await page.evaluate("""
+                (() => {
+                    for (var i = 0; i < localStorage.length; i++) {
+                        try {
+                            item = JSON.parse(localStorage.getItem(localStorage.key(i)));
+                            if (item.credentialType == "AccessToken" 
+                                && item.expiresOn > Math.floor(Date.now() / 1000)
+                                && item.target.includes("designerappservice")) {
+                                return item.secret;
+                            }
+                        } catch(e) {}
+                    }
+                })()
+            """)
+            if access_token is None:
+                await asyncio.sleep(1)
+        await page.close()
+        return access_token, user_agent
+    finally:
+        browser.stop()

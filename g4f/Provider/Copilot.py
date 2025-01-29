@@ -69,7 +69,6 @@ class Copilot(AbstractProvider, ProviderModelMixin):
         conversation: BaseConversation = None,
         return_conversation: bool = False,
         api_key: str = None,
-        web_search: bool = False,
         **kwargs
     ) -> CreateResult:
         if not has_curl_cffi:
@@ -93,7 +92,6 @@ class Copilot(AbstractProvider, ProviderModelMixin):
                         cls._access_token, cls._cookies = asyncio.run(get_access_token_and_cookies(cls.url, proxy))
                     else:
                         raise h
-            yield Parameters(**{"api_key": cls._access_token, "cookies": cls._cookies if isinstance(cls._cookies, dict) else {c.name: c.value for c in cls._cookies}})
             websocket_url = f"{websocket_url}&accessToken={quote(cls._access_token)}"
             headers = {"authorization": f"Bearer {cls._access_token}"}
 
@@ -207,30 +205,33 @@ class Copilot(AbstractProvider, ProviderModelMixin):
 
 async def get_access_token_and_cookies(url: str, proxy: str = None, target: str = "ChatAI",):
     browser = await get_nodriver(proxy=proxy, user_data_dir="copilot")
-    page = await browser.get(url)
-    access_token = None
-    while access_token is None:
-        access_token = await page.evaluate("""
-            (() => {
-                for (var i = 0; i < localStorage.length; i++) {
-                    try {
-                        item = JSON.parse(localStorage.getItem(localStorage.key(i)));
-                        if (item.credentialType == "AccessToken" 
-                            && item.expiresOn > Math.floor(Date.now() / 1000)
-                            && item.target.includes("target")) {
-                            return item.secret;
-                        }
-                    } catch(e) {}
-                }
-            })()
-        """.replace('"target"', json.dumps(target)))
-        if access_token is None:
-            await asyncio.sleep(1)
-    cookies = {}
-    for c in await page.send(nodriver.cdp.network.get_cookies([url])):
-        cookies[c.name] = c.value
-    await page.close()
-    return access_token, cookies
+    try:
+        page = await browser.get(url)
+        access_token = None
+        while access_token is None:
+            access_token = await page.evaluate("""
+                (() => {
+                    for (var i = 0; i < localStorage.length; i++) {
+                        try {
+                            item = JSON.parse(localStorage.getItem(localStorage.key(i)));
+                            if (item.credentialType == "AccessToken" 
+                                && item.expiresOn > Math.floor(Date.now() / 1000)
+                                && item.target.includes("target")) {
+                                return item.secret;
+                            }
+                        } catch(e) {}
+                    }
+                })()
+            """.replace('"target"', json.dumps(target)))
+            if access_token is None:
+                await asyncio.sleep(1)
+        cookies = {}
+        for c in await page.send(nodriver.cdp.network.get_cookies([url])):
+            cookies[c.name] = c.value
+        await page.close()
+        return access_token, cookies
+    finally:
+        browser.stop()
 
 def readHAR(url: str):
     api_key = None
