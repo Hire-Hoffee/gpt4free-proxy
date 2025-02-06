@@ -15,6 +15,7 @@ const inputCount        = document.getElementById("input-count").querySelector("
 const providerSelect    = document.getElementById("provider");
 const modelSelect       = document.getElementById("model");
 const modelProvider     = document.getElementById("model2");
+const custom_model      = document.getElementById("model3");
 const chatPrompt        = document.getElementById("chatPrompt");
 const settings          = document.querySelector(".settings");
 const chat              = document.querySelector(".conversation");
@@ -35,11 +36,12 @@ let title_storage = {};
 let parameters_storage = {};
 let finish_storage = {};
 let usage_storage = {};
-let reasoning_storage = {}
+let reasoning_storage = {};
+let generate_storage = {};
 let is_demo = false;
 
 messageInput.addEventListener("blur", () => {
-    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
 });
 
 messageInput.addEventListener("focus", () => {
@@ -78,16 +80,30 @@ function render_reasoning(reasoning, final = false) {
     </div>` : "";
     return `<div class="reasoning_body">
         <div class="reasoning_title">
-           <strong>Reasoning <i class="fa-solid fa-brain"></i>:</strong> ${escapeHtml(reasoning.status)}
+           <strong>Reasoning <i class="brain">🧠</i>:</strong> ${escapeHtml(reasoning.status)}
         </div>
         ${inner_text}
     </div>`;
+}
+
+function render_reasoning_text(reasoning) {
+    return `Reasoning 🧠: ${reasoning.status}\n\n${reasoning.text}\n\n`;
 }
 
 function filter_message(text) {
     return text.replaceAll(
         /<!-- generated images start -->[\s\S]+<!-- generated images end -->/gm, ""
     ).replace(/ \[aborted\]$/g, "").replace(/ \[error\]$/g, "");
+}
+
+function filter_message_content(text) {
+    return text.replace(/ \[aborted\]$/g, "").replace(/ \[error\]$/g, "")
+}
+
+function filter_message_image(text) {
+    return text.replaceAll(
+        /\]\(\/generate\//gm, "](/images/"
+    )
 }
 
 function fallback_clipboard (text) {
@@ -182,6 +198,54 @@ const get_message_el = (el) => {
     return message_el;
 }
 
+function register_message_images() {
+    message_box.querySelectorAll(`.loading-indicator`).forEach((el) => el.remove());
+    message_box.querySelectorAll(`.message img:not([alt="your avatar"])`).forEach(async (el) => {
+        if (!el.complete) {
+            const indicator = document.createElement("span");
+            indicator.classList.add("loading-indicator");
+            indicator.innerHTML = `<i class="fas fa-spinner fa-spin"></i>`;
+            el.parentElement.appendChild(indicator);
+            el.onerror = () => {
+                let indexCommand;
+                if ((indexCommand = el.src.indexOf("/generate/")) >= 0) {
+                    generate_storage[window.conversation_id] = true;
+                    indexCommand = indexCommand + "/generate/".length + 1;
+                    let newPath = el.src.substring(indexCommand)
+                    let filename = newPath.replace(/(?:\?.+?|$)/, "");
+                    let seed = Math.floor(Date.now() / 1000);
+                    newPath = `https://image.pollinations.ai/prompt/${newPath}?seed=${seed}&nologo=true`;
+                    let downloadUrl = newPath;
+                    if (document.getElementById("download_images")?.checked) {
+                        downloadUrl = `/images/${filename}?url=${escapeHtml(newPath)}`;
+                    }
+                    const link = document.createElement("a");
+                    link.setAttribute("href", newPath);
+                    const newImg = document.createElement("img");
+                    newImg.src = downloadUrl;
+                    newImg.alt = el.alt;
+                    newImg.onload = () => {
+                        lazy_scroll_to_bottom();
+                        indicator.remove();
+                    }
+                    link.appendChild(newImg);
+                    el.parentElement.appendChild(link);
+                } else {
+                    const span = document.createElement("span");
+                    span.innerHTML = `<i class="fa-solid fa-plug"></i>${escapeHtml(el.alt)}`;
+                    el.parentElement.appendChild(span);
+                }
+                el.remove();
+                indicator.remove();
+            }
+            el.onload = () => {
+                indicator.remove();
+                lazy_scroll_to_bottom();
+            }
+        }
+    });
+}
+
 const register_message_buttons = async () => {
     message_box.querySelectorAll(".message .content .provider").forEach(async (el) => {
         if (!("click" in el.dataset)) {
@@ -243,15 +307,20 @@ const register_message_buttons = async () => {
     message_box.querySelectorAll(".message .fa-file-export").forEach(async (el) => {
         if (!("click" in el.dataset)) {
             el.dataset.click = "true";
+            //
             el.addEventListener("click", async () => {
-                let message_el = get_message_el(el);
                 const elem = window.document.createElement('a');
                 let filename = `chat ${new Date().toLocaleString()}.md`.replaceAll(":", "-");
-                elem.href = message_el.dataset.object_url;
-                elem.download = filename;        
-                document.body.appendChild(elem);
-                elem.click();        
-                document.body.removeChild(elem);
+                const conversation = await get_conversation(window.conversation_id);
+                let buffer = "";
+                conversation.items.forEach(message => {
+                    buffer += render_reasoning_text(message.reasoning);
+                    buffer += `${message.role == 'user' ? 'User' : 'Assistant'}: ${message.content.trim()}\n\n\n`;
+                });
+                var download = document.getElementById("download");
+                download.setAttribute("href", "data:text/markdown;charset=utf-8," + encodeURIComponent(buffer.trim()));
+                download.setAttribute("download", filename);
+                download.click();
                 el.classList.add("clicked");
                 setTimeout(() => el.classList.remove("clicked"), 1000);
             })
@@ -369,7 +438,7 @@ const handle_ask = async (do_ask_gpt = true) => {
     messageInput.focus();
     await scroll_to_bottom();
 
-    let message = messageInput.value;
+    let message = messageInput.value.trim();
     if (message.length <= 0) {
         return;
     }
@@ -482,6 +551,8 @@ document.querySelector(".media_player .fa-x").addEventListener("click", ()=>{
 const prepare_messages = (messages, message_index = -1, do_continue = false, do_filter = true) => {
     messages = [ ...messages ]
     if (message_index != null) {
+        console.debug("Messages Index:", message_index);
+
         // Removes messages after selected
         if (message_index >= 0) {
             messages = messages.filter((_, index) => message_index >= index);
@@ -495,6 +566,7 @@ const prepare_messages = (messages, message_index = -1, do_continue = false, do_
                     break;
                 }
             }
+            console.debug("Messages filtered:", messages);
         }
     }
     // Combine assistant messages
@@ -530,10 +602,14 @@ const prepare_messages = (messages, message_index = -1, do_continue = false, do_
         while (last_message = messages.pop()) {
             if (last_message["role"] == "user") {
                 filtered_messages.push(last_message);
+            } else {
                 break;
             }
         }
         messages = filtered_messages.reverse();
+        if (last_message) {
+            console.debug("History removed:", messages)
+        }
     }
 
     messages.forEach((new_message, i) => {
@@ -565,6 +641,7 @@ const prepare_messages = (messages, message_index = -1, do_continue = false, do_
             }
         }
     });
+    console.debug("Final messages:", final_messages)
 
     return final_messages;
 }
@@ -740,6 +817,7 @@ async function add_message_chunk(message, message_id, provider, scroll, finish_m
             if (!img.complete)
                 return;
         content_map.inner.innerHTML = markdown_render(message.preview);
+        await register_message_images();
     } else if (message.type == "content") {
         message_storage[message_id] += message.content;
         update_message(content_map, message_id, null, scroll);
@@ -901,7 +979,7 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
             await add_message(
                 window.conversation_id,
                 "assistant",
-                final_message,
+                filter_message_image(final_message),
                 message_provider,
                 message_index,
                 synthesize_storage[message_id],
@@ -927,7 +1005,7 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
             delete controller_storage[message_id];
         }
         // Reload conversation if no error
-        if (!error_storage[message_id]) {
+        if (!error_storage[message_id] && !generate_storage[window.conversation_id]) {
             await safe_load_conversation(window.conversation_id, scroll);
         }
         let cursorDiv = message_el.querySelector(".cursor");
@@ -937,6 +1015,7 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
         }
         await safe_remove_cancel_button();
         await register_message_buttons();
+        await register_message_images();
         await load_conversations();
         regenerate_button.classList.remove("regenerate-hidden");
     }
@@ -944,19 +1023,25 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
         let api_key;
         if (is_demo && provider == "Feature") {
             api_key = localStorage.getItem("user");
-        } else if (is_demo && provider != "Custom") {
+        } else if (is_demo) {
             api_key = localStorage.getItem("HuggingFace-api_key");
         } else {
             api_key = get_api_key_by_provider(provider);
         }
-        if (is_demo && !api_key && provider != "Custom") {
+        if (is_demo && !api_key) {
             location.href = "/";
             return;
         }
         const input = imageInput && imageInput.files.length > 0 ? imageInput : cameraInput;
         const files = input && input.files.length > 0 ? input.files : null;
         const download_images = document.getElementById("download_images")?.checked;
-        const api_base = provider == "Custom" ? document.getElementById(`${provider}-api_base`).value : null;
+        let api_base;
+        if (provider == "Custom") {
+            api_base = document.getElementById("api_base")?.value;
+            if (!api_base) {
+                provider = "";
+            }
+        }
         const ignored = Array.from(settings.querySelectorAll("input.provider:not(:checked)")).map((el)=>el.value);
         await api("conversation", {
             id: message_id,
@@ -1186,8 +1271,8 @@ const load_conversation = async (conversation_id, scroll=true) => {
         } else {
             buffer = "";
         }
-        buffer = buffer.replace(/ \[aborted\]$/g, "").replace(/ \[error\]$/g, "");
-        new_content = item.content.replace(/ \[aborted\]$/g, "").replace(/ \[error\]$/g, "");
+        buffer = filter_message_content(buffer);
+        new_content = filter_message_content(item.content);
         buffer = merge_messages(buffer, new_content);
         last_model = item.provider?.model;
         providers.push(item.provider?.name);
@@ -1643,12 +1728,9 @@ const register_settings_storage = async () => {
 const load_settings_storage = async () => {
     const optionElements = document.querySelectorAll(optionElementsSelector);
     optionElements.forEach((element) => {
-        if (element.name && element.name != element.id && (value = appStorage.getItem(element.name))) {
-            appStorage.setItem(element.id, value);
-            appStorage.removeItem(element.name);
-        }
-        if (!(value = appStorage.getItem(element.id))) {
-            return;
+        value = appStorage.getItem(element.id);
+        if (value == null && element.dataset.value) {
+            value = element.dataset.value;
         }
         if (value) {
             switch (element.type) {
@@ -1662,10 +1744,10 @@ const load_settings_storage = async () => {
                 case "number":
                 case "textarea":
                     if (element.id.endsWith("-api_key")) {
-                        element.placeholder = value && value.length >= 22 ? (value.substring(0, 12)+"*".repeat(12)+value.substring(value.length-12)) : "*".repeat(value.length);
+                        element.placeholder = value && value.length >= 22 ? (value.substring(0, 12)+"*".repeat(12)+value.substring(value.length-12)) : "*".repeat(value ? value.length : 0);
                         element.dataset.value = value;
                     } else {
-                        element.value = value;
+                        element.value = value == null ? element.dataset.value : value;
                     }
                     break;
                 default:
@@ -1771,7 +1853,11 @@ function update_message(content_map, message_id, content = null, scroll = true) 
 let countFocus = messageInput;
 const count_input = async () => {
     if (countFocus.value) {
-        inputCount.innerText = count_words_and_tokens(countFocus.value, get_selected_model()?.value);
+        if (window.matchMedia("(pointer:coarse)")) {
+            inputCount.innerText = `(${count_tokens(get_selected_model()?.value, countFocus.value)} tokens)`;
+        } else {
+            inputCount.innerText = count_words_and_tokens(countFocus.value, get_selected_model()?.value);
+        }
     } else {
         inputCount.innerText = "";
     }
@@ -1812,14 +1898,14 @@ async function on_load() {
         load_conversation(window.conversation_id);
     } else {
         chatPrompt.value = document.getElementById("systemPrompt")?.value || "";
+        example = document.getElementById("systemPrompt")?.dataset.example || ""
+        if (chatPrompt.value == example) {
+            messageInput.value = "";
+        }
         let chat_url = new URL(window.location.href)
         let chat_params = new URLSearchParams(chat_url.search);
         if (chat_params.get("prompt")) {
-            messageInput.value = chat_params.title
-                               + chat_params.title ? "\n\n\n" : ""
-                               + chat_params.prompt
-                               + chat_params.prompt && chat_params.url ? "\n\n\n" : ""
-                               + chat_params.url;
+            messageInput.value = `${window.location.href}\n`;
             messageInput.style.height = messageInput.scrollHeight  + "px";
             messageInput.focus();
             //await handle_ask();
@@ -1870,7 +1956,8 @@ async function on_api() {
     messageInput.addEventListener("keydown", async (evt) => {
         if (prompt_lock) return;
         // If not mobile and not shift enter
-        if (!window.matchMedia("(pointer:coarse)").matches && evt.keyCode === 13 && !evt.shiftKey) {
+        let do_enter = messageInput.value.endsWith("\n\n\n\n");
+        if (do_enter || !window.matchMedia("(pointer:coarse)").matches && evt.keyCode === 13 && !evt.shiftKey) {
             evt.preventDefault();
             console.log("pressed enter");
             prompt_lock = true;
@@ -1892,7 +1979,9 @@ async function on_api() {
         stop_recognition();
         await handle_ask(false);
     });
-    messageInput.focus();
+    messageInput.addEventListener(`click`, async () => {
+        stop_recognition();
+    });
 
     let provider_options = [];
     models = await api("models");
@@ -1913,7 +2002,9 @@ async function on_api() {
         providerSelect.innerHTML = `
             <option value="">Demo Mode</option>
             <option value="Feature">Feature Provider</option>
-            <option value="Custom">Custom Provider</option>`;
+            <option value="G4F">G4F framework</option>
+            <option value="HuggingFace">HuggingFace</option>
+            <option value="HuggingSpace">HuggingSpace</option>`;
         providerSelect.selectedIndex = 0;
         document.getElementById("pin").disabled = true;
         document.getElementById("refine")?.parentElement.classList.add("hidden")
@@ -1926,7 +2017,6 @@ async function on_api() {
             }
         });
         login_urls = {
-            "Custom": ["Custom Provider", "", []],
             "HuggingFace": ["HuggingFace", "", []],
         };
     } else {
@@ -1961,42 +2051,74 @@ async function on_api() {
                 }
             }
         });
+
+        let providersContainer = document.createElement("div");
+        providersContainer.classList.add("field", "collapsible");
+        providersContainer.innerHTML = `
+            <div class="collapsible-header">
+                <span class="label">Providers (Enable/Disable)</span>
+                <i class="fa-solid fa-chevron-down"></i>
+            </div>
+            <div class="collapsible-content hidden"></div>
+        `;
+        settings.querySelector(".paper").appendChild(providersContainer);
+
         providers.forEach((provider) => {
             if (!provider.parent) {
-                option = document.createElement("div");
-                option.classList.add("field");
+                let option = document.createElement("div");
+                option.classList.add("provider-item");
                 option.innerHTML = `
                     <span class="label">Enable ${provider.label}</span>
                     <input id="Provider${provider.name}" type="checkbox" name="Provider${provider.name}" value="${provider.name}" class="provider" checked="">
                     <label for="Provider${provider.name}" class="toogle" title="Remove provider from dropdown"></label>
                 `;
                 option.querySelector("input").addEventListener("change", (event) => load_provider_option(event.target, provider.name));
-                settings.querySelector(".paper").appendChild(option);
+                providersContainer.querySelector(".collapsible-content").appendChild(option);
                 provider_options[provider.name] = option;
             }
         });
+
+        providersContainer.querySelector(".collapsible-header").addEventListener('click', (e) => {
+            providersContainer.querySelector(".collapsible-content").classList.toggle('hidden');
+            providersContainer.querySelector(".collapsible-header").classList.toggle('active');
+        });
     }
+
     if (appStorage.getItem("provider")) {
         await load_provider_models(appStorage.getItem("provider"))
     } else {
         providerSelect.selectedIndex = 0;
     }
+
+    let providersListContainer = document.createElement("div");
+    providersListContainer.classList.add("field", "collapsible");
+    providersListContainer.innerHTML = `
+        <div class="collapsible-header">
+            <span class="label">Providers API key</span>
+            <i class="fa-solid fa-chevron-down"></i>
+        </div>
+        <div class="collapsible-content hidden"></div>
+    `;
+    settings.querySelector(".paper").appendChild(providersListContainer);
+
     for (let [name, [label, login_url, childs]] of Object.entries(login_urls)) {
         if (!login_url && !is_demo) {
             continue;
         }
-        option = document.createElement("div");
-        option.classList.add("field", "box");
-        if (!is_demo) {
-            option.classList.add("hidden");
-        }
-        childs = childs.map((child)=>`${child}-api_key`).join(" ");
-        option.innerHTML = `
+        let providerBox = document.createElement("div");
+        providerBox.classList.add("field", "box");
+        childs = childs.map((child) => `${child}-api_key`).join(" ");
+        providerBox.innerHTML = `
             <label for="${name}-api_key" class="label" title="">${label}:</label>
             <input type="text" id="${name}-api_key" name="${name}[api_key]" class="${childs}" placeholder="api_key" autocomplete="off"/>
         ` + (login_url ? `<a href="${login_url}" target="_blank" title="Login to ${label}">Get API key</a>` : "");
-        settings.querySelector(".paper").appendChild(option);
+        providersListContainer.querySelector(".collapsible-content").appendChild(providerBox);
     }
+
+    providersListContainer.querySelector(".collapsible-header").addEventListener('click', (e) => {
+        providersListContainer.querySelector(".collapsible-content").classList.toggle('hidden');
+        providersListContainer.querySelector(".collapsible-header").classList.toggle('active');
+    });
 
     register_settings_storage();
     await load_settings_storage();
@@ -2237,7 +2359,9 @@ chatPrompt?.addEventListener("input", async () => {
 });
 
 function get_selected_model() {
-    if (modelProvider.selectedIndex >= 0) {
+    if (custom_model.value) {
+        return custom_model;
+    } else if (modelProvider.selectedIndex >= 0) {
         return modelProvider.options[modelProvider.selectedIndex];
     } else if (modelSelect.selectedIndex >= 0) {
         model = modelSelect.options[modelSelect.selectedIndex];
@@ -2294,38 +2418,23 @@ async function api(ressource, args=null, files=null, message_id=null, scroll=tru
         });
         // On Ratelimit
         if (response.status == 429) {
-            // They are still pending requests?
-            for (let key in controller_storage) {
-                if (!controller_storage[key].signal.aborted) {
-                    console.error(response);
-                    await finish_message();
-                    return;
-                }
-            }
-            setTimeout(async () => {
-                response = await fetch(url, {
-                    method: 'POST',
-                    signal: controller_storage[message_id].signal,
-                    headers: headers,
-                    body: body,
-                });
-                if (response.status != 200) {
-                    console.error(response);
-                }
-                await read_response(response, message_id, args.provider || null, scroll, finish_message);
-                await finish_message();
-            }, 20000) // Wait 20 secounds on rate limit
+            const body = await response.text();
+            const title = body.match(/<title>([^<]+?)<\/title>/)[1];
+            const message = body.match(/<p>([^<]+?)<\/p>/)[1];
+            error_storage[message_id] = `**${title}**\n${message}`;
+            await finish_message();
+            return;
         } else {
             await read_response(response, message_id, args.provider || null, scroll, finish_message);
             await finish_message();
             return;
         }
     } else if (args) {
-        if (ressource == "log") {
-            if (!document.getElementById("report_error").checked) {
+        if (ressource == "log" ||  ressource == "usage") {
+            if (ressource == "log" && !document.getElementById("report_error").checked) {
                 return;
             }
-            url = `https://roxky-g4f-demo.hf.space${url}`;
+            url = `https://roxky-g4f-backup.hf.space${url}`;
         }
         headers['content-type'] = 'application/json';
         response = await fetch(url, {
@@ -2383,35 +2492,68 @@ async function load_provider_models(provider=null) {
     if (!provider) {
         provider = providerSelect.value;
     }
+    if (!custom_model.value) {
+        custom_model.classList.add("hidden");
+    }
+    if (provider.startsWith("Custom") || custom_model.value) {
+        modelProvider.classList.add("hidden");
+        modelSelect.classList.add("hidden");
+        custom_model.classList.remove("hidden");
+        return;
+    }
     modelProvider.innerHTML = '';
     modelProvider.name = `model[${provider}]`;
     if (!provider) {
         modelProvider.classList.add("hidden");
-        modelSelect.classList.remove("hidden");
+        if (custom_model.value) {
+            modelSelect.classList.add("hidden");
+            custom_model.classList.remove("hidden");
+        } else {
+            modelSelect.classList.remove("hidden");
+            custom_model.classList.add("hidden");
+        }
         return;
     }
     const models = await api('models', provider);
     if (models && models.length > 0) {
         modelSelect.classList.add("hidden");
-        modelProvider.classList.remove("hidden");
-        models.forEach((model) => {
+        if (!custom_model.value) {
+            custom_model.classList.add("hidden");
+            modelProvider.classList.remove("hidden");
+        }
+        let defaultIndex = 0;
+        models.forEach((model, i) => {
             let option = document.createElement('option');
             option.value = model.model;
             option.dataset.label = model.model;
             option.text = `${model.model}${model.image ? " (Image Generation)" : ""}${model.vision ? " (Image Upload)" : ""}`;
-            option.selected = model.default;
             modelProvider.appendChild(option);
+            if (model.default) {
+                defaultIndex = i;
+            }
         });
         let value = appStorage.getItem(modelProvider.name);
         if (value) {
             modelProvider.value = value;
         }
+        modelProvider.selectedIndex = defaultIndex;
     } else {
         modelProvider.classList.add("hidden");
-        modelSelect.classList.remove("hidden");
+        custom_model.classList.remove("hidden")
     }
 };
-providerSelect.addEventListener("change", () => load_provider_models());
+providerSelect.addEventListener("change", () => {
+    load_provider_models()
+    messageInput.focus();
+});
+modelSelect.addEventListener("change", () => messageInput.focus());
+modelProvider.addEventListener("change", () =>  messageInput.focus());
+custom_model.addEventListener("change", () => {
+    if (!custom_model.value) {
+        load_provider_models();
+    }
+    messageInput.focus();
+});
 
 document.getElementById("pin").addEventListener("click", async () => {
     const pin_container = document.getElementById("pin_container");
@@ -2446,6 +2588,7 @@ switchInput.addEventListener("change", () => {
 });
 searchButton.addEventListener("click", async () => {
     switchInput.click();
+    messageInput.focus();
 });
 
 function save_storage() {

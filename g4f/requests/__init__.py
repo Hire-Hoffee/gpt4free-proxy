@@ -28,6 +28,7 @@ try:
     from nodriver import Browser, Tab, util
     has_nodriver = True
 except ImportError:
+    from typing import Type as Browser
     from typing import Type as Tab
     has_nodriver = False
 try:
@@ -85,9 +86,14 @@ async def get_args_from_nodriver(
     timeout: int = 120,
     wait_for: str = None,
     callback: callable = None,
-    cookies: Cookies = None
+    cookies: Cookies = None,
+    browser: Browser = None
 ) -> dict:
-    browser = await get_nodriver(proxy=proxy, timeout=timeout)
+    if browser is None:
+        browser, stop_browser = await get_nodriver(proxy=proxy, timeout=timeout)
+    else:
+        def stop_browser():
+            ...
     try:
         if debug.logging:
             print(f"Open nodriver with url: {url}")
@@ -117,7 +123,7 @@ async def get_args_from_nodriver(
             "proxy": proxy,
         }
     finally:
-        browser.stop()
+        stop_browser()
 
 def merge_cookies(cookies: Iterator[Morsel], response: Response) -> Cookies:
     if cookies is None:
@@ -131,7 +137,7 @@ async def get_nodriver(
     timeout: int = 120,
     browser_executable_path=None,
     **kwargs
-) -> Browser:
+) -> tuple[Browser, callable]:
     if not has_nodriver:
         raise MissingRequirementsError('Install "nodriver" and "platformdirs" package | pip install -U nodriver platformdirs')
     user_data_dir = user_config_dir(f"g4f-{user_data_dir}") if has_platformdirs else None
@@ -167,14 +173,13 @@ async def get_nodriver(
         )
     except:
         if util.get_registered_instances():
-            browser = util.get_registered_instances()[-1]
+            browser = util.get_registered_instances().pop()
         else:
             raise
-    stop = browser.stop
     def on_stop():
         try:
-            stop()
+            if browser.connection:
+                browser.stop()
         finally:
             lock_file.unlink(missing_ok=True)
-    browser.stop = on_stop
-    return browser
+    return browser, on_stop

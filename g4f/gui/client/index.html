@@ -47,12 +47,13 @@
             gallery: '#messages',
             children: 'a:has(img)',
             secondaryZoomLevel: 2,
+            allowPanToNext: true,
             pswpModule: () => import('https://cdn.jsdelivr.net/npm/photoswipe'),
         });
         lightbox.addFilter('itemData', (itemData, index) => {
             const img = itemData.element.querySelector('img');
-            itemData.width = img.naturalWidth;
-            itemData.height = img.naturalHeight;
+            itemData.width = img.naturalWidth || 1024;
+            itemData.height = img.naturalHeight || 1024;
             return itemData;
         });
         lightbox.on('uiRegister', function() {
@@ -66,7 +67,18 @@
                     lightbox.pswp.on('change', () => {
                         const currSlideElement = lightbox.pswp.currSlide.data.element;
                         if (currSlideElement) {
-                            el.innerText = currSlideElement.querySelector('img').getAttribute('alt');
+                            const img = currSlideElement.querySelector('img');
+                            const download = document.createElement("a");
+                            download.setAttribute("href", img.getAttribute('src'));
+                            let extension = img.getAttribute('src').includes(".webp") ? ".webp" : ".jpg";
+                            download.setAttribute("download", `${img.getAttribute('alt')} ${lightbox.pswp.currSlide.index}${extension}`);
+                            download.style.float = "right";
+                            download.innerHTML = '<i class="fa-solid fa-download"></i>';
+                            let span = document.createElement("span");
+                            span.innerText = img.getAttribute('alt');
+                            el.innerHTML = '';
+                            el.appendChild(download);
+                            el.appendChild(span);
                         }
                     });
                 }
@@ -157,8 +169,8 @@
                 <label for="report_error" class="toogle" title=""></label>
             </div>
             <div class="field box">
-                <label for="systemPrompt" class="label" title="">System prompt</label>
-                <textarea id="systemPrompt" placeholder="You are a helpful assistant."></textarea>
+                <label for="systemPrompt" class="label">System prompt</label>
+                <textarea id="systemPrompt" placeholder="You are a helpful assistant." data-example="If you need to generate images, you can use the following format: ![keywords](/generate/filename.jpg). This will enable the use of an image generation tool."></textarea>
             </div>
             <div class="field box">
                 <label for="message-input-height" class="label" title="">Input max. height</label>
@@ -248,7 +260,7 @@
                 </div>
             </div>
             <div class="user-input">
-                <div class="box input-box">
+                <div class="box input-area">
                     <textarea id="message-input" placeholder="Ask a question" cols="30" rows="10"
                         style="white-space: pre-wrap;resize: none;"></textarea>
                     <label class="file-label image-label" for="image" title="">
@@ -269,6 +281,7 @@
                     <div id="send-button">
                         <i class="fa-solid fa-square-plus"></i>
                         <i class="fa-regular fa-paper-plane"></i>
+                        <a href="" id="download" class="hidden"></a>
                     </div>
                 </div>
             </div>
@@ -293,7 +306,8 @@
                      <option value="dall-e-3">dall-e-3 (Image Generation)</option>
                      <option disabled="disabled">----</option>
                   </select>
-                  <select name="model2" id="model2" class="hidden"></select>
+                  <select name="model2" id="model2" class="hidden model"></select>
+                  <input type="text" id="model3" value="" class="hidden model" placeholder="Model:"/>
                </div>
                <div class="field">
                   <select name="provider" id="provider">
@@ -303,6 +317,7 @@
                      <option value="Gemini">Google Gemini</option>
                      <option value="DDG">DuckDuckGo AI Chat</option>
                      <option value="Blackbox">Blackbox AI</option>
+                     <option value="Custom Model">Custom Model</option>
                      <option disabled="disabled">----</option>
                     </select>
                 </div>

@@ -7,8 +7,9 @@ import uuid
 from ..typing import AsyncResult, Messages, ImageType, Cookies
 from .base_provider import AsyncGeneratorProvider, ProviderModelMixin
 from .helper import format_prompt
-from ..image import ImageResponse, ImagePreview, EXTENSIONS_MAP, to_bytes, is_accepted_format
+from ..image import EXTENSIONS_MAP, to_bytes, is_accepted_format
 from ..requests import StreamSession, FormData, raise_for_status, get_nodriver
+from ..providers.response import ImagePreview, ImageResponse
 from ..cookies import get_cookies
 from ..errors import MissingRequirementsError, ResponseError
 from .. import debug
@@ -77,7 +78,7 @@ class You(AsyncGeneratorProvider, ProviderModelMixin):
             except MissingRequirementsError:
                 pass
             if not cookies or "afUserId" not in cookies:
-                browser = await get_nodriver(proxy=proxy)
+                browser, stop_browser = await get_nodriver(proxy=proxy)
                 try:
                     page = await browser.get(cls.url)
                     await page.wait_for('[data-testid="user-profile-button"]', timeout=900)
@@ -86,7 +87,7 @@ class You(AsyncGeneratorProvider, ProviderModelMixin):
                         cookies[c.name] = c.value
                     await page.close()
                 finally:
-                    browser.stop()
+                    stop_browser()
         async with StreamSession(
             proxy=proxy,
             impersonate="chrome",

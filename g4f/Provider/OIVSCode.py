@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .needs_auth.OpenaiTemplate import OpenaiTemplate
+from .template import OpenaiTemplate
 
 class OIVSCode(OpenaiTemplate):
     label = "OI VSCode Server"
@@ -9,7 +9,6 @@ class OIVSCode(OpenaiTemplate):
     working = True
     needs_auth = False
     
-    default_model = "gpt-4o-mini-2024-07-18"
+    default_model = "gpt-4o-mini"
     default_vision_model = default_model
     vision_models = [default_model, "gpt-4o-mini"]    
-    model_aliases = {"gpt-4o-mini": "gpt-4o-mini-2024-07-18"}

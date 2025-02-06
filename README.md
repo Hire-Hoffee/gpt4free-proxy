@@ -1,8 +1,3 @@
-
-
-
-![248433934-7886223b-c1d1-4260-82aa-da5741f303bb](https://github.com/xtekky/gpt4free/assets/98614666/ea012c87-76e0-496a-8ac4-e2de090cc6c9)
-
 <a href="https://trendshift.io/repositories/1692" target="_blank"><img src="https://trendshift.io/api/badge/repositories/1692" alt="xtekky%2Fgpt4free | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
 ---
@@ -39,27 +34,27 @@ docker pull hlohaus789/g4f
   Find comprehensive details on our [Releases Page](https://github.com/xtekky/gpt4free/releases).  
 
 - **Stay updated with our Telegram Channel** 📨  
-  Join us at [telegram.me/g4f_channel](https://telegram.me/g4f_channel).  
-
-- **Get support in our Discord Community** 🤝💻  
-  Reach out for help in our [Support Group: discord.gg/qXA4Wf4Fsm](https://discord.gg/qXA4Wf4Fsm).  
-
+  Join us at [telegram.me/g4f_channel](https://telegram.me/g4f_channel).
+  
 - **Subscribe to our Discord News Channel** 💬🆕️  
-  Stay informed about updates via our [News Channel: discord.gg/5E39JUWUFa](https://discord.gg/5E39JUWUFa).  
+  Stay informed about updates via our [News Channel: discord.gg/5E39JUWUFa](https://discord.gg/5E39JUWUFa).
+  
+- **Get support in our Discord Community** 🤝💻  
+  Reach out for help in our [Support Group: discord.gg/qXA4Wf4Fsm](https://discord.gg/qXA4Wf4Fsm).
 
 ## 🔻 Site Takedown
 
 Is your site on this repository and you want to take it down? Send an email to takedown@g4f.ai with proof it is yours and it will be removed as fast as possible. To prevent reproduction please secure your API. 😉
 
 ## 🚀 GPT4Free on HuggingFace
-[![HuggingSpace](https://github.com/user-attachments/assets/1d859e8a-d6fa-416f-a213-ccc26aa11e90)](https://huggingface.co/spaces/roxky/g4f)
+[![HuggingSpace](https://github.com/user-attachments/assets/1d859e8a-d6fa-416f-a213-ccc26aa11e90)](https://huggingface.co/spaces/roxky/g4f-space)
 **Is a proof-of-concept API package for multi-provider AI requests. It showcases features such as:**
 
 - Load balancing and request flow control.
 - Seamless integration with multiple AI providers.
 - Comprehensive text and image generation support.
 
-> Explore the [Visit GPT4Free on HuggingFace Space](https://huggingface.co/spaces/roxky/g4f-demo) for a hosted version or [Duplicate GPT4Free Space](https://huggingface.co/spaces/roxky/g4f-demo?duplicate=true) it for personal use.
+> Explore the [Visit GPT4Free on HuggingFace Space](https://huggingface.co/spaces/roxky/g4f-space) for a hosted version or [Duplicate GPT4Free Space](https://huggingface.co/spaces/roxky/g4f-space?duplicate=true) it for personal use.
 
 ---
 
@@ -98,12 +93,12 @@ Is your site on this repository and you want to take it down? Send an email to t
 
 ### 🐳 Using Docker
 1. **Install Docker:** [Download and install Docker](https://docs.docker.com/get-docker/).
-2. **Set Up Directories:** Before running the container, make sure the necessary data directories exist or can be created. For example, you can create and set ownership on these directories by running: (Only x64)
+2. **Set Up Directories:** Before running the container, make sure the necessary data directories exist or can be created. For example, you can create and set ownership on these directories by running: 
 ```bash
    mkdir -p ${PWD}/har_and_cookies ${PWD}/generated_images
    sudo chown -R 1200:1201 ${PWD}/har_and_cookies ${PWD}/generated_images
 ```
-3. **Run the Docker Container:** Use the following commands to pull the latest image and start the container:
+3. **Run the Docker Container:** Use the following commands to pull the latest image and start the container (Only x64):
 ```bash
    docker pull hlohaus789/g4f
    docker run -p 8080:8080 -p 7900:7900 \
@@ -213,9 +208,13 @@ from g4f.gui import run_gui
 
 run_gui()
 ```
-**Or, run via CLI:**
+** Run via CLI (To start the Flask Server):**
 ```bash
-python -m g4f.cli gui -port 8080 -debug
+python -m g4f.cli gui --port 8080 --debug
+```
+**Or, start the FastAPI Server:**
+```bash
+python -m g4f --port 8080 --debug
 ```
 
 > **Learn More About the GUI:** For detailed instructions on how to set up, configure, and use the GPT4Free GUI, refer to the [GUI Documentation](docs/gui.md) . This guide includes step-by-step details on provider selection, managing conversations, using advanced features like speech recognition, and more.

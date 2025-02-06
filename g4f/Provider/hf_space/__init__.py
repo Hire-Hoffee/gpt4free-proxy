@@ -10,10 +10,12 @@ from .BlackForestLabsFlux1Dev        import BlackForestLabsFlux1Dev
 from .BlackForestLabsFlux1Schnell    import BlackForestLabsFlux1Schnell
 from .VoodoohopFlux1Schnell          import VoodoohopFlux1Schnell
 from .CohereForAI                    import CohereForAI
+from .Janus_Pro_7B                   import Janus_Pro_7B
 from .Qwen_QVQ_72B                   import Qwen_QVQ_72B
 from .Qwen_Qwen_2_5M_Demo            import Qwen_Qwen_2_5M_Demo
 from .Qwen_Qwen_2_72B_Instruct       import Qwen_Qwen_2_72B_Instruct
 from .StableDiffusion35Large         import StableDiffusion35Large
+from .G4F                            import G4F
 
 class HuggingSpace(AsyncGeneratorProvider, ProviderModelMixin):
     url = "https://huggingface.co/spaces"
@@ -25,8 +27,16 @@ class HuggingSpace(AsyncGeneratorProvider, ProviderModelMixin):
     default_image_model = BlackForestLabsFlux1Dev.default_model
     default_vision_model = Qwen_QVQ_72B.default_model
     providers = [
-        BlackForestLabsFlux1Dev, BlackForestLabsFlux1Schnell, VoodoohopFlux1Schnell,
-        CohereForAI, Qwen_QVQ_72B, Qwen_Qwen_2_5M_Demo, Qwen_Qwen_2_72B_Instruct, StableDiffusion35Large
+        BlackForestLabsFlux1Dev,
+        BlackForestLabsFlux1Schnell,
+        VoodoohopFlux1Schnell,
+        CohereForAI,
+        Janus_Pro_7B,
+        Qwen_QVQ_72B,
+        Qwen_Qwen_2_5M_Demo,
+        Qwen_Qwen_2_72B_Instruct,
+        StableDiffusion35Large,
+        G4F
     ]
 
     @classmethod
@@ -64,7 +74,7 @@ class HuggingSpace(AsyncGeneratorProvider, ProviderModelMixin):
         random.shuffle(cls.providers)
         for provider in cls.providers:
             if model in provider.model_aliases:
-                async for chunk in provider.create_async_generator(provider.model_aliases[model], messages, **kwargs):
+                async for chunk in provider.create_async_generator(provider.model_aliases[model], messages, images=images, **kwargs):
                     is_started = True
                     yield chunk
             if is_started:
@@ -73,7 +83,7 @@ class HuggingSpace(AsyncGeneratorProvider, ProviderModelMixin):
         for provider in cls.providers:
             if model in provider.get_models():
                 try:
-                    async for chunk in provider.create_async_generator(model, messages, **kwargs):
+                    async for chunk in provider.create_async_generator(model, messages, images=images, **kwargs):
                         is_started = True
                         yield chunk
                     if is_started:

@@ -9,6 +9,8 @@ import shutil
 from email.utils import formatdate
 import os.path
 import hashlib
+import asyncio
+from urllib.parse import quote_plus
 from fastapi import FastAPI, Response, Request, UploadFile, Depends
 from fastapi.middleware.wsgi import WSGIMiddleware
 from fastapi.responses import StreamingResponse, RedirectResponse, HTMLResponse, JSONResponse
@@ -37,7 +39,8 @@ import g4f.debug
 from g4f.client import AsyncClient, ChatCompletion, ImagesResponse, convert_to_provider
 from g4f.providers.response import BaseConversation, JsonConversation
 from g4f.client.helper import filter_none
-from g4f.image import is_data_uri_an_image, images_dir
+from g4f.image import is_data_uri_an_image
+from g4f.image.copy_images import images_dir, copy_images
 from g4f.errors import ProviderNotFoundError, ModelNotFoundError, MissingAuthError, NoValidHarFileError
 from g4f.cookies import read_cookie_files, get_cookies_dir
 from g4f.Provider import ProviderType, ProviderUtils, __providers__
@@ -49,6 +52,7 @@ from .stubs import (
     ErrorResponseModel, ProviderResponseDetailModel,
     FileResponseModel, UploadResponseModel, Annotated
 )
+from g4f import debug
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +75,7 @@ def create_app():
     api.register_routes()
     api.register_authorization()
     api.register_validation_exception_handler()
- 
+
     if AppConfig.gui:
         gui_app = WSGIMiddleware(get_gui_app(AppConfig.demo))
         app.mount("/", gui_app)
@@ -174,11 +178,11 @@ class Api:
                         return ErrorResponse.from_message("G4F API key required", HTTP_401_UNAUTHORIZED)
                     if not secrets.compare_digest(AppConfig.g4f_api_key, user_g4f_api_key):
                         return ErrorResponse.from_message("Invalid G4F API key", HTTP_403_FORBIDDEN)
-                elif not AppConfig.demo:
-                    if user_g4f_api_key is not None and path.startswith("/images/"):
+                elif not AppConfig.demo and not path.startswith("/images/"):
+                    if user_g4f_api_key is not None:
                         if not secrets.compare_digest(AppConfig.g4f_api_key, user_g4f_api_key):
                             return ErrorResponse.from_message("Invalid G4F API key", HTTP_403_FORBIDDEN)
-                    elif path.startswith("/backend-api/") or path.startswith("/images/") or path.startswith("/chat/") and path != "/chat/":
+                    elif path.startswith("/backend-api/") or path.startswith("/chat/") and path != "/chat/":
                         try:
                             username = await self.get_username(request)
                         except HTTPException as e:
@@ -539,26 +543,36 @@ class Api:
             content_type = getattr(provider_handler, "synthesize_content_type", "application/octet-stream")
             return StreamingResponse(response_data, media_type=content_type)
 
-        @self.app.get("/images/{filename}", response_class=FileResponse, responses={
+        @self.app.post("/json/{filename}")
+        async def get_json(filename, request: Request):
+            await asyncio.sleep(30)
+            return ""
+
+        @self.app.get("/images/{filename}", responses={
             HTTP_200_OK: {"content": {"image/*": {}}},
             HTTP_404_NOT_FOUND: {}
         })
         async def get_image(filename, request: Request):
-            target = os.path.join(images_dir, filename)
-            ext = os.path.splitext(filename)[1]
+            target = os.path.join(images_dir, quote_plus(filename))
+            ext = os.path.splitext(filename)[1][1:]
             stat_result = SimpleNamespace()
             stat_result.st_size = 0
             if os.path.isfile(target):
                 stat_result.st_size = os.stat(target).st_size
-            stat_result.st_mtime = int(f"{filename.split('_')[0]}")
+            stat_result.st_mtime = int(f"{filename.split('_')[0]}") if filename.startswith("1") else 0
+            headers = {
+                "cache-control": "public, max-age=31536000",
+                "content-type": f"image/{ext.replace('jpg', 'jpeg') or 'jpeg'}",
+                "last-modified": formatdate(stat_result.st_mtime, usegmt=True),
+                "etag": f'"{hashlib.md5(filename.encode()).hexdigest()}"',
+                **({
+                    "content-length": str(stat_result.st_size),
+                } if stat_result.st_size else {})
+            }
             response = FileResponse(
                 target,
-                media_type=f"image/{ext.replace('jpg', 'jepg')}",
-                headers={
-                    "content-length": str(stat_result.st_size),
-                    "last-modified": formatdate(stat_result.st_mtime, usegmt=True),
-                    "etag": f'"{hashlib.md5(filename.encode()).hexdigest()}"'
-                },
+                headers=headers,
+                filename=filename,
             )
             try:
                 if_none_match = request.headers["if-none-match"]
@@ -568,8 +582,29 @@ class Api:
             except KeyError:
                 pass
             if not os.path.isfile(target):
-                return Response(status_code=HTTP_404_NOT_FOUND)
-            return response
+                source_url = str(request.query_params).split("url=", 1)
+                if len(source_url) > 1:
+                    source_url = source_url[1]
+                    source_url = source_url.replace("%2F", "/").replace("%3A", ":").replace("%3F", "?").replace("%3D", "=")
+                    if source_url.startswith("https://"):
+                        try:
+                            await copy_images(
+                                [source_url],
+                                target=target)
+                            debug.log(f"Image copied from {source_url}")
+                        except Exception as e:
+                            debug.log(f"{type(e).__name__}: Download failed:  {source_url}\n{e}")
+                            return RedirectResponse(url=source_url)
+            if not os.path.isfile(target):
+                return ErrorResponse.from_message("File not found", HTTP_404_NOT_FOUND)
+            async def stream():
+                with open(target, "rb") as file:
+                    while True:
+                        chunk = file.read(65536)
+                        if not chunk:
+                            break
+                        yield chunk
+            return StreamingResponse(stream(), headers=headers)
 
 def format_exception(e: Union[Exception, str], config: Union[ChatCompletionsConfig, ImageGenerationConfig] = None, image: bool = False) -> str:
     last_provider = {} if not image else g4f.get_last_provider(True)

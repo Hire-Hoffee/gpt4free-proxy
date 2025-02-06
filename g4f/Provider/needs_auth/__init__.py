@@ -6,15 +6,13 @@ from .Custom            import Custom
 from .Custom            import Feature
 from .DeepInfra         import DeepInfra
 from .DeepSeek          import DeepSeek
+from .DeepSeekAPI       import DeepSeekAPI
 from .Gemini            import Gemini
 from .GeminiPro         import GeminiPro
 from .GigaChat          import GigaChat
 from .GithubCopilot     import GithubCopilot
 from .GlhfChat          import GlhfChat
 from .Groq              import Groq
-from .HuggingChat       import HuggingChat
-from .HuggingFace       import HuggingFace
-from .HuggingFaceAPI    import HuggingFaceAPI
 from .MetaAI            import MetaAI
 from .MetaAIAccount     import MetaAIAccount
 from .MicrosoftDesigner import MicrosoftDesigner

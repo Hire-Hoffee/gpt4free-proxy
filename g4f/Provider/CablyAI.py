@@ -1,37 +1,48 @@
 from __future__ import annotations
 
-from ..typing import AsyncResult, Messages
-from .needs_auth.OpenaiTemplate import OpenaiTemplate
+from ..errors import ModelNotSupportedError
+from .template import OpenaiTemplate
 
 class CablyAI(OpenaiTemplate):
+    label = "CablyAI"
     url = "https://cablyai.com"
-    login_url = None
-    needs_auth = False
+    login_url = url
     api_base = "https://cablyai.com/v1"
+    api_key = "sk-your-openai-api-key"
+    
     working = True
-
-    default_model = "Cably-80B"
-    models = [default_model]
-    model_aliases = {"cably-80b": default_model}
+    needs_auth = False
+    
+    default_model = 'gpt-4o-mini'
+    reasoning_models = ['deepseek-r1-uncensored']
+    fallback_models = [
+        default_model,
+        'searchgpt',
+        'llama-3.1-8b-instruct',
+        'deepseek-v3',
+        'tinyswallow1.5b',
+        'andy-3.5',
+        'o3-mini-low',
+    ] + reasoning_models
+    
+    model_aliases = {
+        "searchgpt": "searchgpt (free)",
+        "gpt-4o-mini": "searchgpt",
+        "llama-3.1-8b": "llama-3.1-8b-instruct",
+        "deepseek-r1": "deepseek-r1-uncensored",
+    }
 
     @classmethod
-    def create_async_generator(
-        cls,
-        model: str,
-        messages: Messages,
-        **kwargs
-    ) -> AsyncResult:      
-        headers = {
-            'Accept': '*/*',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Content-Type': 'application/json',
-            'Origin': 'https://cablyai.com',
-            'Referer': 'https://cablyai.com/chat',
-            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-        }
-        return super().create_async_generator(
-            model=model,
-            messages=messages,
-            headers=headers,
-            **kwargs
-        )
+    def get_models(cls, api_key: str = None, api_base: str = None) -> list[str]:
+        models = super().get_models(api_key, api_base);
+        return [f"{m} (free)" for m in models if m in cls.fallback_models] + models
+
+    @classmethod
+    def get_model(cls, model: str, **kwargs) -> str:
+        try:
+            model = super().get_model(model, **kwargs)
+            return model.split(" (free)")[0]
+        except ModelNotSupportedError:
+            if f"f{model} (free)" in cls.models:
+                return model
+            raise

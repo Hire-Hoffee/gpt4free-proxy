@@ -8,13 +8,13 @@ from flask import send_from_directory
 from inspect import signature
 
 from ...errors import VersionNotFoundError
-from ...image import ImagePreview, ImageResponse, copy_images, ensure_images_dir, images_dir
+from ...image.copy_images import copy_images, ensure_images_dir, images_dir
 from ...tools.run_tools import iter_run_tools
 from ...Provider import ProviderUtils, __providers__
 from ...providers.base_provider import ProviderModelMixin
 from ...providers.retry_provider import BaseRetryProvider
-from ...providers.response import BaseConversation, JsonConversation, FinishReason, Usage, Reasoning, PreviewResponse
-from ...providers.response import SynthesizeData, TitleGeneration, RequestLogin, Parameters, ProviderInfo
+from ...providers.helper import format_image_prompt
+from ...providers.response import *
 from ... import version, models
 from ... import ChatCompletion, get_model_and_provider
 from ... import debug
@@ -157,6 +157,8 @@ class Api:
             yield self._format_json('error', type(e).__name__, message=get_error_message(e))
             return
         if not isinstance(provider_handler, BaseRetryProvider):
+            if not provider:
+                provider = provider_handler.__name__
             yield self.handle_provider(provider_handler, model)
             if hasattr(provider_handler, "get_parameters"):
                 yield self._format_json("parameters", provider_handler.get_parameters(as_json=True))
@@ -180,14 +182,17 @@ class Api:
                 elif isinstance(chunk, Exception):
                     logger.exception(chunk)
                     yield self._format_json('message', get_error_message(chunk), error=type(chunk).__name__)
-                elif isinstance(chunk, (PreviewResponse, ImagePreview)):
+                elif isinstance(chunk, PreviewResponse):
                     yield self._format_json("preview", chunk.to_string())
+                elif isinstance(chunk, ImagePreview):
+                    yield self._format_json("preview", chunk.to_string(), images=chunk.images, alt=chunk.alt)
                 elif isinstance(chunk, ImageResponse):
                     images = chunk
-                    if download_images:
-                        images = asyncio.run(copy_images(chunk.get_list(), chunk.get("cookies"), proxy))
+                    if download_images or chunk.get("cookies"):
+                        chunk.alt = chunk.alt or format_image_prompt(kwargs.get("messages"))
+                        images = asyncio.run(copy_images(chunk.get_list(), chunk.get("cookies"), proxy=proxy, alt=chunk.alt))
                         images = ImageResponse(images, chunk.alt)
-                    yield self._format_json("content", str(images))
+                    yield self._format_json("content", str(images), images=chunk.get_list(), alt=chunk.alt)
                 elif isinstance(chunk, SynthesizeData):
                     yield self._format_json("synthesize", chunk.get_dict())
                 elif isinstance(chunk, TitleGeneration):
@@ -201,7 +206,11 @@ class Api:
                 elif isinstance(chunk, Usage):
                     yield self._format_json("usage", chunk.get_dict())
                 elif isinstance(chunk, Reasoning):
-                    yield self._format_json("reasoning", token=chunk.token, status=chunk.status)
+                    yield self._format_json("reasoning", **chunk.get_dict())
+                elif isinstance(chunk, DebugResponse):
+                    yield self._format_json("log", chunk.log)
+                elif isinstance(chunk, RawResponse):
+                    yield self._format_json(chunk.type, **chunk.get_dict())
                 else:
                     yield self._format_json("content", str(chunk))
                 if debug.logs:
@@ -210,6 +219,8 @@ class Api:
                     debug.logs = []
         except Exception as e:
             logger.exception(e)
+            if debug.logging:
+                debug.log_handler(get_error_message(e))
             if debug.logs:
                 for log in debug.logs:
                     yield self._format_json("log", str(log))
@@ -217,10 +228,11 @@ class Api:
             yield self._format_json('error', type(e).__name__, message=get_error_message(e))
 
     def _format_json(self, response_type: str, content = None, **kwargs):
-        if content is not None:
+        if content is not None and isinstance(response_type, str):
             return {
                 'type': response_type,
                 response_type: content,
+                **kwargs
             }
         return {
             'type': response_type,

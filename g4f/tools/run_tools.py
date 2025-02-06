@@ -3,12 +3,14 @@ from __future__ import annotations
 import re
 import json
 import asyncio
+import time
 from pathlib import Path
 from typing import Optional, Callable, AsyncIterator
 
 from ..typing import Messages
 from ..providers.helper import filter_none
 from ..providers.asyncio import to_async_iterator
+from ..providers.response import Reasoning
 from ..providers.types import ProviderType
 from ..cookies import get_cookies_dir
 from .web_search import do_search, get_search_message
@@ -147,4 +149,37 @@ def iter_run_tools(
                     if has_bucket and isinstance(messages[-1]["content"], str):
                         messages[-1]["content"] += BUCKET_INSTRUCTIONS
 
-    return iter_callback(model=model, messages=messages, provider=provider, **kwargs)
+    is_thinking = 0
+    for chunk in iter_callback(model=model, messages=messages, provider=provider, **kwargs):
+        if not isinstance(chunk, str):
+            yield chunk
+            continue
+        if "<think>" in chunk and not "`<think>`" in chunk:
+            if chunk != "<think>":
+                chunk = chunk.split("<think>", 1)
+                if len(chunk) > 0 and chunk[0]:
+                    yield chunk[0]
+            yield Reasoning(status="🤔 Is thinking...", is_thinking="<think>")
+            if chunk != "<think>":
+                if len(chunk) > 1 and chunk[1]:
+                    yield Reasoning(chunk[1])
+            is_thinking = time.time()
+        else:
+            if "</think>" in chunk:
+                if chunk != "<think>":
+                    chunk = chunk.split("</think>", 1)
+                    if len(chunk) > 0 and chunk[0]:
+                        yield Reasoning(chunk[0])
+                is_thinking = time.time() - is_thinking if is_thinking > 0 else 0
+                if is_thinking > 1:
+                    yield Reasoning(status=f"Thought for {is_thinking:.2f}s", is_thinking="</think>")
+                else:
+                    yield Reasoning(status=f"Finished", is_thinking="</think>")
+                if chunk != "<think>":
+                    if len(chunk) > 1 and chunk[1]:
+                        yield chunk[1]
+                is_thinking = 0
+            elif is_thinking:
+                yield Reasoning(chunk)
+            else:
+                yield chunk

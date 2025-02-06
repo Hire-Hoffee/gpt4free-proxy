@@ -9,13 +9,13 @@ from .deprecated       import *
 from .needs_auth       import *
 from .not_working      import *
 from .local            import *
+from .hf               import HuggingFace, HuggingChat, HuggingFaceAPI, HuggingFaceInference
 from .hf_space         import HuggingSpace
 from .mini_max         import HailuoAI, MiniMax
+from .template         import OpenaiTemplate, BackendApi
 
-from .AIChatFree           import AIChatFree
-from .AIUncensored         import AIUncensored
-from .AutonomousAI         import AutonomousAI
 from .Blackbox             import Blackbox
+from .BlackboxAPI          import BlackboxAPI
 from .CablyAI              import CablyAI
 from .ChatGLM              import ChatGLM
 from .ChatGpt              import ChatGpt
@@ -23,13 +23,12 @@ from .ChatGptEs            import ChatGptEs
 from .ChatGptt             import ChatGptt
 from .Cloudflare           import Cloudflare
 from .Copilot              import Copilot
-from .DarkAI               import DarkAI
 from .DDG                  import DDG
 from .DeepInfraChat        import DeepInfraChat
 from .Free2GPT             import Free2GPT
 from .FreeGpt              import FreeGpt
 from .GizAI                import GizAI
-from .GPROChat             import GPROChat
+from .Glider               import Glider
 from .ImageLabs            import ImageLabs
 from .Jmuz                 import Jmuz
 from .Liaobots             import Liaobots
@@ -39,6 +38,7 @@ from .PerplexityLabs       import PerplexityLabs
 from .Pi                   import Pi
 from .Pizzagpt             import Pizzagpt
 from .PollinationsAI       import PollinationsAI
+from .PollinationsImage    import PollinationsImage
 from .Prodia               import Prodia
 from .TeachAnything        import TeachAnything
 from .You                  import You
@@ -55,6 +55,7 @@ __providers__: list[ProviderType] = [
     if isinstance(provider, type)
     and issubclass(provider, BaseProvider)
 ]
+__providers__ = __providers__ + HuggingSpace.providers
 __all__: list[str] = [
     provider.__name__ for provider in __providers__
 ]
