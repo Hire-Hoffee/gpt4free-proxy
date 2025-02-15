@@ -12,4 +12,4 @@ services:
       resources:
         limits:
           memory: 250M
-    restart: on-failure
+    restart: always
