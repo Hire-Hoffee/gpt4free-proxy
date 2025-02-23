@@ -23,6 +23,6 @@ jobs:
           script: |
             cd ~/projects/gpt4free-proxy
             git pull
-            source venv/bin/activate
-            pip install -r requirements.txt
-            pm2 restart 0
+            docker-compose -f docker-compose-proxy.yml down
+            docker-compose -f docker-compose-proxy.yml build
+            docker-compose -f docker-compose-proxy.yml up -d
