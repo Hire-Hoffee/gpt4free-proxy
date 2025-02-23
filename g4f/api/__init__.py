@@ -10,7 +10,6 @@ from email.utils import formatdate
 import os.path
 import hashlib
 import asyncio
-from urllib.parse import quote_plus
 from fastapi import FastAPI, Response, Request, UploadFile, Depends
 from fastapi.middleware.wsgi import WSGIMiddleware
 from fastapi.responses import StreamingResponse, RedirectResponse, HTMLResponse, JSONResponse
@@ -552,7 +551,7 @@ class Api:
             HTTP_404_NOT_FOUND: {}
         })
         async def get_image(filename, request: Request):
-            target = os.path.join(images_dir, quote_plus(filename))
+            target = os.path.join(images_dir, os.path.basename(filename))
             ext = os.path.splitext(filename)[1][1:]
             stat_result = SimpleNamespace()
             stat_result.st_size = 0
@@ -589,7 +588,7 @@ class Api:
                             target=target)
                         debug.log(f"Image copied from {source_url}")
                     except Exception as e:
-                        debug.log(f"{type(e).__name__}: Download failed:  {source_url}\n{e}")
+                        debug.error(f"Download failed:  {source_url}\n{type(e).__name__}: {e}")
                         return RedirectResponse(url=source_url)
             if not os.path.isfile(target):
                 return ErrorResponse.from_message("File not found", HTTP_404_NOT_FOUND)

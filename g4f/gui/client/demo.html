@@ -181,10 +181,23 @@
     <script>
         (async () => {
             const isIframe = window.self !== window.top;
+            const backendUrl = "{{backend_url}}";
             let url = new URL(window.location.href)
             let params = new URLSearchParams(url.search);
+            if (isIframe && backendUrl) {
+                if (params.get("get_gpu_token")) {
+                    window.addEventListener('DOMContentLoaded', async function() {
+                        const link = document.getElementById("new_window");
+                        link.href = `${backendUrl}${url.search}`;
+                        link.click();
+                    });
+                } else {
+                    window.location.replace(`${backendUrl}${url.search}`);
+                }
+                return;
+            }
             if (params.get("__sign")) {
-                localStorage.setItem("zerogpu_token", params.get("__sign"));
+                localStorage.setItem("HuggingSpace-api_key", params.get("__sign"));
                 if (!isIframe) {
                     window.location.replace("/");
                 }
@@ -221,7 +234,7 @@
         <form action="/chat/">
             <input type="text" name="token" class="input-field" placeholder="Enter an Access Token..." autocomplete="off">
             <div class="button-container">
-                <a href="" class="button hidden" target="_blank">New Window</a>
+                <a id="new_window" href="" class="button hidden" target="_blank">New Window</a>
                 <button class="button">Submit</button>
             </div>
             <p>
@@ -237,7 +250,7 @@
             if (isIframe) {
                 button.classList.remove('hidden');
             } else {
-                init("roxky/g4f-space");
+                init("roxky/g4f-space-new");
             }
 
             const form = document.querySelector("form");
@@ -282,13 +295,11 @@
             const cache_id = Math.floor(Math.random() * max);
             let prompt;
             if (cache_id % 2 == 0) {
-                prompt = `
-                Today is ${new Date().toJSON().slice(0, 10)}.
+                prompt = `Today is ${new Date().toJSON().slice(0, 10)}.
                 Create a single-page HTML screensaver reflecting the current season (based on the date).
                 Avoid using any text.`;
             } else {
                 prompt = `Create a single-page HTML screensaver. Avoid using any text.`;
-                const response = await fetch(`/backend-api/v2/create?prompt=${prompt}&filter_markdown=html&cache=${cache_id}`);
             }
             const response = await fetch(`/backend-api/v2/create?prompt=${prompt}&filter_markdown=html&cache=${cache_id}`);
             const text = await response.text()
