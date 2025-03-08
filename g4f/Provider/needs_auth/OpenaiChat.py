@@ -8,7 +8,7 @@ import json
 import base64
 import time
 import random
-from typing import AsyncIterator, Iterator, Optional, Generator, Dict, List
+from typing import AsyncIterator, Iterator, Optional, Generator, Dict
 from copy import copy
 
 try:
@@ -101,7 +101,7 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
     image_models = image_models
     vision_models = text_models
     models = models
-    synthesize_content_type = "audio/mpeg"
+    synthesize_content_type = "audio/aac"
     request_config = RequestConfig()
 
     _api_key: str = None
@@ -110,8 +110,8 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
     _expires: int = None
 
     @classmethod
-    async def on_auth_async(cls, **kwargs) -> AsyncIterator:
-        async for chunk in cls.login():
+    async def on_auth_async(cls, proxy: str = None, **kwargs) -> AsyncIterator:
+        async for chunk in cls.login(proxy=proxy):
             yield chunk
         yield AuthResult(
             api_key=cls._api_key,
@@ -344,7 +344,7 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
                     headers=cls._headers
                 ) as response:
                     if response.status in (401, 403):
-                        auth_result.reset()
+                        raise MissingAuthError(f"Response status: {response.status}")
                     else:
                         cls._update_request_args(auth_result, session)
                     await raise_for_status(response)
@@ -426,8 +426,7 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
                     headers=headers
                 ) as response:
                     cls._update_request_args(auth_result, session)
-                    if response.status == 403:
-                        cls.request_config.proof_token = None
+                    if response.status in (401, 403):
                         raise MissingAuthError("Access token is not valid")
                     await raise_for_status(response)
                     buffer = u""
@@ -587,17 +586,10 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
             except NoValidHarFileError:
                 if has_nodriver:
                     if cls._api_key is None:
-                        login_url = os.environ.get("G4F_LOGIN_URL")
-                        if login_url:
-                            yield RequestLogin(cls.label, login_url)
+                        yield RequestLogin(cls.label, os.environ.get("G4F_LOGIN_URL", ""))
                         await cls.nodriver_auth(proxy)
                 else:
                     raise
-        yield Parameters(**{
-            "api_key": cls._api_key,
-            "proof_token": cls.request_config.proof_token,
-            "cookies": cls.request_config.cookies,
-        })
 
     @classmethod
     async def nodriver_auth(cls, proxy: str = None):
@@ -606,7 +598,8 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
             page = browser.main_tab
             def on_request(event: nodriver.cdp.network.RequestWillBeSent):
                 if event.request.url == start_url or event.request.url.startswith(conversation_url):
-                    cls.request_config.headers = event.request.headers
+                    for key, value in event.request.headers.items():
+                        cls.request_config.headers[key.lower()] = value
                 elif event.request.url in (backend_url, backend_anon_url):
                     if "OpenAI-Sentinel-Proof-Token" in event.request.headers:
                             cls.request_config.proof_token = json.loads(base64.b64decode(

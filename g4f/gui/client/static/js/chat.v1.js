@@ -7,7 +7,9 @@ const regenerate_button = document.querySelector(`.regenerate`);
 const sidebar           = document.querySelector(".conversations");
 const sidebar_button    = document.querySelector(".mobile-sidebar");
 const sendButton        = document.getElementById("send-button");
-const imageInput        = document.getElementById("image");
+const imageInput        = document.querySelector(".image-label");
+const mediaSelect       = document.querySelector(".media-select");
+const imageSelect       = document.getElementById("image");
 const cameraInput       = document.getElementById("camera");
 const fileInput         = document.getElementById("file");
 const microLabel        = document.querySelector(".micro-label");
@@ -39,6 +41,8 @@ let finish_storage = {};
 let usage_storage = {};
 let reasoning_storage = {};
 let generate_storage = {};
+let title_ids_storage = {};
+let image_storage = {};
 let is_demo = false;
 let wakeLock = null;
 let countTokensEnabled = true;
@@ -74,6 +78,10 @@ if (window.markdownit) {
         )
             .replaceAll("<a href=", '<a target="_blank" href=')
             .replaceAll('<code>', '<code class="language-plaintext">')
+            .replaceAll('&lt;i class=&quot;', '<i class="')
+            .replaceAll('&quot;&gt;&lt;/i&gt;', '"></i>')
+            .replaceAll('&lt;iframe type=&quot;text/html&quot; src=&quot;', '<iframe type="text/html" frameborder="0" src="')
+            .replaceAll('&quot;&gt;&lt;/iframe&gt;', `?enablejsapi=1&origin=${new URL(location.href).origin}` + '"></iframe>')
     }
 }
 
@@ -301,7 +309,9 @@ const register_message_buttons = async () => {
         const conversation = await get_conversation(window.conversation_id);
         let buffer = "";
         conversation.items.forEach(message => {
-            buffer += render_reasoning_text(message.reasoning);
+            if (message.reasoning) {
+                buffer += render_reasoning_text(message.reasoning);
+            }
             buffer += `${message.role == 'user' ? 'User' : 'Assistant'}: ${message.content.trim()}\n\n\n`;
         });
         var download = document.getElementById("download");
@@ -421,39 +431,26 @@ const handle_ask = async (do_ask_gpt = true) => {
     let message_index = await add_message(window.conversation_id, "user", message);
     let message_id = get_message_id();
 
-    let images = [];
-    if (do_ask_gpt) {
-        if (imageInput.dataset.objects) {
-            imageInput.dataset.objects.split(" ").forEach((object)=>URL.revokeObjectURL(object))
-            delete imageInput.dataset.objects;
-        }
-        const input = imageInput && imageInput.files.length > 0 ? imageInput : cameraInput
-        if (input.files.length > 0) {
-            for (const file of input.files) {
-                images.push(URL.createObjectURL(file));
-            }
-            imageInput.dataset.objects = images.join(" ");
-        }
-    }
-    message_box.innerHTML += `
-        <div class="message" data-index="${message_index}">
-            <div class="user">
-                ${user_image}
-                <i class="fa-solid fa-xmark"></i>
-                <i class="fa-regular fa-phone-arrow-up-right"></i>
+    const message_el = document.createElement("div");
+    message_el.classList.add("message");
+    message_el.dataset.index = message_index;
+    message_el.innerHTML = `
+        <div class="user">
+            ${user_image}
+            <i class="fa-solid fa-xmark"></i>
+            <i class="fa-regular fa-phone-arrow-up-right"></i>
+        </div>
+        <div class="content" id="user_${message_id}"> 
+            <div class="content_inner">
+            ${markdown_render(message)}
             </div>
-            <div class="content" id="user_${message_id}"> 
-                <div class="content_inner">
-                ${markdown_render(message)}
-                ${images.map((object)=>'<img src="' + object + '" alt="Image upload">').join("")}
-                </div>
-                <div class="count">
-                    ${countTokensEnabled ? count_words_and_tokens(message, get_selected_model()?.value) : ""}
-                </div>
+            <div class="count">
+                ${countTokensEnabled ? count_words_and_tokens(message, get_selected_model()?.value) : ""}
             </div>
         </div>
     `;
-    highlight(message_box);
+    message_box.appendChild(message_el);
+    highlight(message_el);
     if (do_ask_gpt) {
         const all_pinned = document.querySelectorAll(".buttons button.pinned")
         if (all_pinned.length > 0) {
@@ -468,7 +465,7 @@ const handle_ask = async (do_ask_gpt = true) => {
             await ask_gpt(message_id);
         }
     } else {
-        await lazy_scroll_to_bottom();
+        await safe_load_conversation(window.conversation_id, true);
     }
 };
 
@@ -847,7 +844,7 @@ function is_stopped() {
     return false;
 }
 
-const requestWakeLock = async (onVisibilityChange = false) => {
+const requestWakeLock = async () => {
     try {
       wakeLock = await navigator.wakeLock.request('screen');
     }
@@ -893,7 +890,7 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
             <i class="fa-solid fa-xmark"></i>
             <i class="fa-regular fa-phone-arrow-down-left"></i>
         </div>
-        <div class="content" id="gpt_${message_id}">
+        <div class="content">
             <div class="provider" data-provider="${provider}"></div>
             <div class="content_inner"><span class="cursor"></span></div>
             <div class="count"></div>
@@ -911,7 +908,7 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
 
     controller_storage[message_id] = new AbortController();
 
-    let content_el = document.getElementById(`gpt_${message_id}`)
+    let content_el = message_el.querySelector('.content');
     let content_map = content_storage[message_id] = {
         container: message_el,
         content: content_el,
@@ -930,8 +927,6 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
             html = markdown_render(message_storage[message_id]);
             content_map.inner.innerHTML = html;
             highlight(content_map.inner);
-            if (imageInput) imageInput.value = "";
-            if (cameraInput) cameraInput.value = "";
         }
         if (message_storage[message_id]) {
             const message_provider = message_id in provider_storage ? provider_storage[message_id] : null;
@@ -1012,7 +1007,7 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
     }
     try {
         let api_key;
-        if (is_demo && provider == "Feature") {
+        if (is_demo && ["OpenaiChat", "DeepSeekAPI", "PollinationsAI", "Gemini"].includes(provider)) {
             api_key = localStorage.getItem("user");
         } else if (["HuggingSpace", "G4F"].includes(provider)) {
             api_key = localStorage.getItem("HuggingSpace-api_key");
@@ -1025,8 +1020,6 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
         } else {
             api_key = get_api_key_by_provider(provider);
         }
-        const input = imageInput && imageInput.files.length > 0 ? imageInput : cameraInput;
-        const files = input && input.files.length > 0 ? input.files : null;
         const download_images = document.getElementById("download_images")?.checked;
         let api_base;
         if (provider == "Custom") {
@@ -1049,7 +1042,7 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
             api_key: api_key,
             api_base: api_base,
             ignored: ignored,
-        }, files, message_id, scroll, finish_message);
+        }, Object.values(image_storage), message_id, scroll, finish_message);
     } catch (e) {
         console.error(e);
         if (e.name != "AbortError") {
@@ -1096,9 +1089,30 @@ const clear_conversation = async () => {
     }
 };
 
+var illegalRe = /[\/\?<>\\:\*\|":]/g;
+var controlRe = /[\x00-\x1f\x80-\x9f]/g;
+var reservedRe = /^\.+$/;
+var windowsReservedRe = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
+
+function sanitize(input, replacement) {
+  var sanitized = input
+    .replace(illegalRe, replacement)
+    .replace(controlRe, replacement)
+    .replace(reservedRe, replacement)
+    .replace(windowsReservedRe, replacement);
+  return sanitized.replaceAll(/\/|#|\s{2,}/g, replacement).trim();
+}
+
 async function set_conversation_title(conversation_id, title) {
     conversation = await get_conversation(conversation_id)
     conversation.new_title = title;
+    const new_id = sanitize(title, " ");
+    if (new_id && !appStorage.getItem(`conversation:${new_id}`)) {
+        appStorage.removeItem(`conversation:${conversation.id}`);
+        title_ids_storage[conversation_id] = new_id;
+        conversation.id = new_id;
+        add_url_to_history(`/chat/${conversation_id}`);
+    }
     appStorage.setItem(
         `conversation:${conversation.id}`,
         JSON.stringify(conversation)
@@ -1123,6 +1137,7 @@ const show_option = async (conversation_id) => {
         input_el.onclick = (e) => e.stopPropagation()
         input_el.onfocus = () => trash_el.style.display = "none";
         input_el.onchange = () => set_conversation_title(conversation_id, input_el.value);
+        input_el.onblur = () => set_conversation_title(conversation_id, input_el.value);
         left_el.removeChild(title_el);
         left_el.appendChild(input_el);
     }
@@ -1162,6 +1177,9 @@ const delete_conversation = async (conversation_id) => {
 };
 
 const set_conversation = async (conversation_id) => {
+    if (title_ids_storage[conversation_id]) {
+        conversation_id = title_ids_storage[conversation_id];
+    }
     try {
         add_url_to_history(`/chat/${conversation_id}`);
     } catch (e) {
@@ -1912,11 +1930,11 @@ async function on_load() {
             messageInput.focus();
             //await handle_ask();
         }
-    } else if (/\/chat\/[^?]+/.test(window.location.href)) {
-        load_conversation(window.conversation_id);
-    } else {
+    } else if (/\/chat\/[?$]/.test(window.location.href)) {
         chatPrompt.value = document.getElementById("systemPrompt")?.value || "";
         say_hello();
+    } else {
+        //load_conversation(window.conversation_id);
     }
     load_conversations();
 }
@@ -1968,7 +1986,7 @@ async function on_api() {
             console.log("pressed enter");
             prompt_lock = true;
             setTimeout(()=>prompt_lock=false, 3000);
-            await handle_ask();
+            await handle_ask(!do_enter);
         } else {
             messageInput.style.height = messageInput.scrollHeight  + "px";
         }
@@ -2007,9 +2025,11 @@ async function on_api() {
         }
         providerSelect.innerHTML = `
             <option value="" selected="selected">Demo Mode</option>
-            <option value="Feature">Feature Provider</option>
+            <option value="DeepSeekAPI">DeepSeek Provider</option>
+            <option value="OpenaiChat">OpenAI Provider</option>
             <option value="PollinationsAI">Pollinations AI</option>
             <option value="G4F">G4F framework</option>
+            <option value="Gemini">Gemini Provider</option>
             <option value="HuggingFace">HuggingFace</option>
             <option value="HuggingSpace">HuggingSpace</option>
             <option value="HuggingChat">HuggingChat</option>`;
@@ -2215,12 +2235,51 @@ async function load_version() {
     setTimeout(load_version, 1000 * 60 * 60); // 1 hour
 }
 
-[imageInput, cameraInput].forEach((el) => {
-    el.addEventListener('click', async () => {
-        el.value = '';
-        if (imageInput.dataset.objects) {
-            imageInput.dataset.objects.split(" ").forEach((object) => URL.revokeObjectURL(object));
-            delete imageInput.dataset.objects
+function renderMediaSelect() {
+    const oldImages = mediaSelect.querySelectorAll("a:has(img)");
+    oldImages.forEach((el)=>el.remove());
+    Object.entries(image_storage).forEach(([object_url, file]) => {
+        const link = document.createElement("a");
+        link.title = file.name;
+        const img = document.createElement("img");
+        img.src = object_url;
+        img.onclick = () => {
+            img.remove();
+            delete image_storage[object_url];
+            URL.revokeObjectURL(object_url)
+        }
+        img.onload = () => {
+            link.title += `\n${img.naturalWidth}x${img.naturalHeight}`;
+        };
+        link.appendChild(img);
+        mediaSelect.appendChild(link);
+    });
+}
+
+imageInput.onclick = () => {
+    mediaSelect.classList.toggle("hidden");
+}
+
+mediaSelect.querySelector(".close").onclick = () => {
+    if (Object.values(image_storage).length) {
+        for (key in image_storage) {
+            URL.revokeObjectURL(key);
+        }
+        image_storage = {};
+        renderMediaSelect();
+    } else {
+        mediaSelect.classList.add("hidden");
+    }
+}
+
+[imageSelect, cameraInput].forEach((el) => {
+    el.addEventListener('change', async () => {
+        if (el.files.length) {
+            Array.from(el.files).forEach((file) => {
+                image_storage[URL.createObjectURL(file)] = file;
+            });
+            el.value = "";
+            renderMediaSelect();
         }
     });
 });
@@ -2236,7 +2295,7 @@ cameraInput?.addEventListener("click", (e) => {
     }
 });
 
-imageInput?.addEventListener("click", (e) => {
+imageSelect?.addEventListener("click", (e) => {
     if (window?.pywebview) {
         e.preventDefault();
         pywebview.api.choose_image();
@@ -2340,7 +2399,6 @@ fileInput.addEventListener('change', async (event) => {
                     Object.keys(data).forEach(key => {
                         if (key == "options") {
                             Object.keys(data[key]).forEach(keyOption => {
-                                console.log(keyOption, data[key][keyOption]);
                                 appStorage.setItem(keyOption, data[key][keyOption]);
                                 count += 1;
                             });
@@ -2432,7 +2490,7 @@ async function api(ressource, args=null, files=null, message_id=null, scroll=tru
     } else if (ressource == "conversation") {
         let body = JSON.stringify(args);
         headers.accept = 'text/event-stream';
-        if (files !== null) {
+        if (files.length > 0) {
             const formData = new FormData();
             for (const file of files) {
                 formData.append('files', file)
@@ -2719,7 +2777,9 @@ if (SpeechRecognition) {
         buffer = "";
     };
     recognition.onend = function() {
-        messageInput.value = `${startValue ? startValue + "\n" : ""}${buffer}`;
+        if (buffer) {
+            messageInput.value = `${startValue ? startValue + "\n" : ""}${buffer}`;
+        }
         if (microLabel.classList.contains("recognition")) {
             recognition.start();
         } else {

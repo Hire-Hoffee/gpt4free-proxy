@@ -19,8 +19,7 @@ def quote_url(url: str) -> str:
 
 def quote_title(title: str) -> str:
     if title:
-        title = " ".join(title.split())
-        return title.replace('[', '').replace(']', '')
+        return " ".join(title.split())
     return ""
 
 def format_link(url: str, title: str = None) -> str:
@@ -161,9 +160,19 @@ class Sources(ResponseType):
             self.list.append(source)
 
     def __str__(self) -> str:
-        return "\n\n" + ("\n".join([
-            f"{idx+1}. {format_link(link['url'], link.get('title', None))}"
+        return "\n\n\n\n" + ("\n>\n".join([
+            f"> [{idx}] {format_link(link['url'], link.get('title', None))}"
             for idx, link in enumerate(self.list)
+        ]))
+
+class YouTube(ResponseType):
+    def __init__(self, ids: list[str]) -> None:
+        self.ids = ids
+
+    def __str__(self) -> str:
+        return "\n\n" + ("\n".join([
+            f'<iframe type="text/html" src="https://www.youtube.com/embed/{id}"></iframe>'
+            for id in self.ids
         ]))
 
 class BaseConversation(ResponseType):
@@ -178,12 +187,12 @@ class SynthesizeData(HiddenResponse, JsonMixin):
         self.provider = provider
         self.data = data
 
-class RequestLogin(ResponseType):
+class RequestLogin(HiddenResponse):
     def __init__(self, label: str, login_url: str) -> None:
         self.label = label
         self.login_url = login_url
 
-    def __str__(self) -> str:
+    def to_string(self) -> str:
         return format_link(self.login_url, f"[Login to {self.label}]") + "\n\n"
 
 class ImageResponse(ResponseType):

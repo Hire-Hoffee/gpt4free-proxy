@@ -21,10 +21,10 @@ pip install g4f pydantic_ai
 
 ### 1. Patch PydanticAI to Use G4F Models
 
-In order to use PydanticAI with G4F models, you need to apply the necessary patch to the client. This can be done by importing `patch_infer_model` from `g4f.tools.pydantic_ai`. The `api_key` parameter is optional, so if you have one, you can provide it. If not, the system will proceed without it.
+In order to use PydanticAI with G4F models, you need to apply the necessary patch to the client. This can be done by importing `patch_infer_model` from `g4f.integration.pydantic_ai`. The `api_key` parameter is optional, so if you have one, you can provide it. If not, the system will proceed without it.
 
 ```python
-from g4f.tools.pydantic_ai import patch_infer_model
+from g4f.integration.pydantic_ai import patch_infer_model
 
 patch_infer_model(api_key="your_api_key_here")  # Optional
 ```
@@ -89,7 +89,7 @@ For example, you can process your query or interact with external systems before
 
 ```python
 from pydantic_ai import Agent
-from g4f.tools.pydantic_ai import AIModel
+from g4f.integration.pydantic_ai import AIModel
 
 agent = Agent(
     AIModel("gpt-4o"),
@@ -109,7 +109,7 @@ This example shows how to initialize an agent with a specific model (`gpt-4o`) a
 from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.models import ModelSettings
-from g4f.tools.pydantic_ai import patch_infer_model
+from g4f.integration.pydantic_ai import patch_infer_model
 
 patch_infer_model("your_api_key")
 
@@ -126,6 +126,106 @@ if __name__ == '__main__':
 ```
 
 This example demonstrates the use of a custom Pydantic model (`MyModel`) to capture structured data (city and country) from the response and running the agent with specific model settings.
+
+---
+
+### Support for Models/Providers without Tool Call Support
+
+For models/providers that do not fully support tool calls or lack a direct API for structured output, the `ToolSupportProvider` can be used to bridge the gap. This provider ensures that the agent properly formats the response, even when the model itself doesn't have built-in support for structured outputs. It does so by leveraging a tool list and creating a response format when only one tool is used.
+
+### Example for Models/Providers without Tool Support (Single Tool Usage)
+
+```python
+from pydantic import BaseModel
+from pydantic_ai import Agent
+from pydantic_ai.models import ModelSettings
+from g4f.integration.pydantic_ai import AIModel
+from g4f.providers.tool_support import ToolSupportProvider
+
+from g4f import debug
+debug.logging = True
+
+# Define a custom model for structured output (e.g., city and country)
+class MyModel(BaseModel):
+    city: str
+    country: str
+
+# Create the agent for a model with tool support (using one tool)
+agent = Agent(AIModel(
+    "PollinationsAI:openai", # Specify the provider and model
+    ToolSupportProvider # Use ToolSupportProvider to handle tool-based response formatting
+), result_type=MyModel, model_settings=ModelSettings(temperature=0))
+
+if __name__ == '__main__':
+    # Run the agent with a query to extract information (e.g., city and country)
+    result = agent.run_sync('European city with the bear.')
+    print(result.data)  # Structured output of city and country
+    print(result.usage()) # Usage statistics
+```
+
+### Explanation:
+
+- **`ToolSupportProvider` as a Bridge:** The `ToolSupportProvider` acts as a bridge between the agent and the model, ensuring that the response is formatted into a structured output, even if the model doesn't have an API that directly supports such formatting.
+  
+  - For instance, if the model generates raw text or unstructured data, the `ToolSupportProvider` will convert this into the expected format (like `MyModel`), allowing the agent to process it as structured data.
+  
+- **Model Initialization:** We initialize the agent with the `PollinationsAI:openai` model, which may not have a built-in API for returning structured outputs. Instead, it relies on the `ToolSupportProvider` to format the output.
+
+- **Custom Result Model:** We define a custom Pydantic model (`MyModel`) to capture the expected output in a structured way (e.g., `city` and `country` fields). This helps ensure that even when the model doesn't support structured data, the agent can interpret and format it.
+
+- **Debug Logging:** The `g4f.debug.logging` is enabled to provide detailed logs for troubleshooting and monitoring the agent's execution.
+
+### Example Output:
+
+```bash
+city='Berlin'
+country='Germany'
+usage={'prompt_tokens': 15, 'completion_tokens': 50}
+```
+
+### Key Points:
+
+- **`ToolSupportProvider` Role:** The `ToolSupportProvider` ensures that the agent formats the raw or unstructured response from the model into a structured format, even if the model itself lacks built-in support for structured data.
+  
+- **Single Tool Usage:** The `ToolSupportProvider` is particularly useful when only one tool is used by the model, and it needs to format or transform the model's output into a structured response without additional tools.
+
+### Notes:
+
+- This approach is ideal for models that return unstructured text or data that needs to be transformed into a structured format (e.g., Pydantic models).
+- The `ToolSupportProvider` bridges the gap between the model's output and the expected structured format, enabling seamless integration into workflows that require structured responses.
+
+---
+
+## LangChain Integration Example
+
+For users working with LangChain, here is an example demonstrating how to integrate G4F models into a LangChain environment:
+
+```python
+from g4f.integration.langchain import ChatAI
+import g4f.debug
+
+# Enable debugging logs
+g4f.debug.logging = True
+
+llm = ChatAI(
+    model="llama3-70b-8192",
+    provider="Groq",
+    api_key=""  # Optionally add your API key here
+)
+
+messages = [
+    {"role": "user", "content": "2 🦜 2"},
+    {"role": "assistant", "content": "4 🦜"},
+    {"role": "user", "content": "2 🦜 3"},
+    {"role": "assistant", "content": "5 🦜"},
+    {"role": "user", "content": "3 🦜 4"},
+]
+
+response = llm.invoke(messages)
+assert(response.content == "7 🦜")
+```
+
+This example shows how to use LangChain's `ChatAI` integration to create a conversational agent with a G4F model. The interaction takes place with the given messages and the agent processes them step-by-step to return the expected output.
 
 ---
 

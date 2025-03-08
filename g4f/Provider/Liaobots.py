@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+import json
 from aiohttp import ClientSession, BaseConnector
 
 from ..typing import AsyncResult, Messages
@@ -17,6 +18,51 @@ models = {
         "maxLength": 31200,
         "tokenLimit": 7800,
         "context": "8K",
+    },
+    "grok-3": {
+        "id": "grok-3",
+        "name": "Grok-3",
+        "model": "Grok",
+        "provider": "x.ai",
+        "maxLength": 800000,
+        "tokenLimit": 200000,
+        "context": "200K",
+    },
+    "grok-3-r1": {
+        "id": "grok-3-r1",
+        "name": "Grok-3-Thinking",
+        "model": "Grok",
+        "provider": "x.ai",
+        "maxLength": 800000,
+        "tokenLimit": 200000,
+        "context": "200K",
+    },
+    "deepseek-r1": {
+        "id": "deepseek-r1",
+        "name": "DeepSeek-R1",
+        "model": "DeepSeek-R1",
+        "provider": "DeepSeek",
+        "maxLength": 400000,
+        "tokenLimit": 100000,
+        "context": "128K",
+    },
+    "deepseek-r1-distill-llama-70b": {
+        "id": "deepseek-r1-distill-llama-70b",
+        "name": "DeepSeek-R1-70B",
+        "model": "DeepSeek-R1-70B",
+        "provider": "DeepSeek",
+        "maxLength": 400000,
+        "tokenLimit": 100000,
+        "context": "128K",
+    },
+    "deepseek-v3": {
+        "id": "deepseek-v3",
+        "name": "DeepSeek-V3",
+        "model": "DeepSeek-V3",
+        "provider": "DeepSeek",
+        "maxLength": 400000,
+        "tokenLimit": 100000,
+        "context": "128K",
     },
     "gpt-4o-2024-11-20": {
         "id": "gpt-4o-2024-11-20",
@@ -36,6 +82,15 @@ models = {
         "tokenLimit": 126000,
         "context": "128K",
     },
+    "o3-mini": {
+        "id": "o3-mini",
+        "name": "o3-mini",
+        "model": "o3",
+        "provider": "OpenAI",
+        "maxLength": 400000,
+        "tokenLimit": 100000,
+        "context": "128K",
+    },
     "o1-preview-2024-09-12": {
         "id": "o1-preview-2024-09-12",
         "name": "o1-preview",
@@ -44,51 +99,6 @@ models = {
         "maxLength": 400000,
         "tokenLimit": 100000,
         "context": "128K",
-    },
-    "o1-mini-2024-09-12": {
-        "id": "o1-mini-2024-09-12",
-        "name": "o1-mini",
-        "model": "o1",
-        "provider": "OpenAI",
-        "maxLength": 400000,
-        "tokenLimit": 100000,
-        "context": "128K",
-    },
-    "DeepSeek-R1-Distill-Llama-70b": {
-        "id": "DeepSeek-R1-Distill-Llama-70b",
-        "name": "DeepSeek-R1-70B",
-        "model": "DeepSeek-R1-70B",
-        "provider": "DeepSeek",
-        "maxLength": 400000,
-        "tokenLimit": 100000,
-        "context": "128K",
-    },
-    "DeepSeek-R1": {
-        "id": "DeepSeek-R1",
-        "name": "DeepSeek-R1",
-        "model": "DeepSeek-R1",
-        "provider": "DeepSeek",
-        "maxLength": 400000,
-        "tokenLimit": 100000,
-        "context": "128K",
-    },
-    "DeepSeek-V3": {
-        "id": "DeepSeek-V3",
-        "name": "DeepSeek-V3",
-        "model": "DeepSeek-V3",
-        "provider": "DeepSeek",
-        "maxLength": 400000,
-        "tokenLimit": 100000,
-        "context": "128K",
-    },
-    "grok-2": {
-        "id": "grok-2",
-        "name": "Grok-2",
-        "model": "Grok",
-        "provider": "x.ai",
-        "maxLength": 400000,
-        "tokenLimit": 100000,
-        "context": "100K",
     },
     "claude-3-opus-20240229": {
         "id": "claude-3-opus-20240229",
@@ -144,9 +154,9 @@ models = {
         "tokenLimit": 200000,
         "context": "200K",
     },
-    "gemini-2.0-flash-exp": {
-        "id": "gemini-2.0-flash-exp",
-        "name": "Gemini-2.0-Flash-Exp",
+    "gemini-2.0-flash": {
+        "id": "gemini-2.0-flash",
+        "name": "Gemini-2.0-Flash",
         "model": "Gemini",
         "provider": "Google",
         "maxLength": 4000000,
@@ -162,18 +172,9 @@ models = {
         "tokenLimit": 1000000,
         "context": "1024K",
     },
-    "gemini-1.5-flash-002": {
-        "id": "gemini-1.5-flash-002",
-        "name": "Gemini-1.5-Flash-1M",
-        "model": "Gemini",
-        "provider": "Google",
-        "maxLength": 4000000,
-        "tokenLimit": 1000000,
-        "context": "1024K",
-    },
-    "gemini-1.5-pro-002": {
-        "id": "gemini-1.5-pro-002",
-        "name": "Gemini-1.5-Pro-1M",
+    "gemini-2.0-pro-exp": {
+        "id": "gemini-2.0-pro-exp",
+        "name": "Gemini-2.0-Pro-Exp",
         "model": "Gemini",
         "provider": "Google",
         "maxLength": 4000000,
@@ -197,11 +198,8 @@ class Liaobots(AsyncGeneratorProvider, ProviderModelMixin):
         "gpt-4": default_model,
         
         "o1-preview": "o1-preview-2024-09-12",
-        "o1-mini": "o1-mini-2024-09-12",
         
-        "deepseek-r1": "DeepSeek-R1-Distill-Llama-70b",
-        "deepseek-r1": "DeepSeek-R1",
-        "deepseek-v3": "DeepSeek-V3",
+        "deepseek-r1": "deepseek-r1-distill-llama-70b",
         
         "claude-3-opus": "claude-3-opus-20240229",
         "claude-3.5-sonnet": "claude-3-5-sonnet-20240620",
@@ -210,10 +208,7 @@ class Liaobots(AsyncGeneratorProvider, ProviderModelMixin):
         "claude-3-opus": "claude-3-opus-20240229-t",
         "claude-3.5-sonnet": "claude-3-5-sonnet-20241022-t",
         
-        "gemini-2.0-flash": "gemini-2.0-flash-exp",
         "gemini-2.0-flash-thinking": "gemini-2.0-flash-thinking-exp",
-        "gemini-1.5-flash": "gemini-1.5-flash-002",
-        "gemini-1.5-pro": "gemini-1.5-pro-002"
     }
     
     _auth_code = ""
@@ -296,7 +291,10 @@ class Liaobots(AsyncGeneratorProvider, ProviderModelMixin):
                         if b"<html coupert-item=" in chunk:
                             raise RuntimeError("Invalid session")
                         if chunk:
-                            yield chunk.decode(errors="ignore")
+                            if chunk.startswith(b"data: "):
+                                yield json.loads(chunk[6:]).get("content")
+                            else:
+                                yield chunk.decode(errors="ignore")
             except:
                 async with session.post(
                     "https://liaobots.work/api/user",
@@ -319,7 +317,10 @@ class Liaobots(AsyncGeneratorProvider, ProviderModelMixin):
                         if b"<html coupert-item=" in chunk:
                             raise RuntimeError("Invalid session")
                         if chunk:
-                            yield chunk.decode(errors="ignore")
+                            if chunk.startswith(b"data: "):
+                                yield json.loads(chunk[6:]).get("content")
+                            else:
+                                yield chunk.decode(errors="ignore")
 
     @classmethod
     async def initialize_auth_code(cls, session: ClientSession) -> None:
