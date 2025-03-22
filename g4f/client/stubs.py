@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from time import time
 
+from ..image import extract_data_uri
+from ..client.helper import filter_markdown
 from .helper import filter_none
 
 try:
@@ -27,7 +29,7 @@ class BaseModel(BaseModel):
         return cls.construct(**data)
 
 class TokenDetails(BaseModel):
-    pass
+    cached_tokens: int
 
 class UsageModel(BaseModel):
     prompt_tokens: int
@@ -42,7 +44,7 @@ class UsageModel(BaseModel):
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
-            prompt_tokens_details=TokenDetails.model_construct(**prompt_tokens_details if prompt_tokens_details else {}),
+            prompt_tokens_details=TokenDetails.model_construct(**prompt_tokens_details if prompt_tokens_details else {"cached_tokens": 0}),
             completion_tokens_details=TokenDetails.model_construct(**completion_tokens_details if completion_tokens_details else {}),
             **kwargs
         )
@@ -103,6 +105,16 @@ class ChatCompletionMessage(BaseModel):
     def model_construct(cls, content: str, tool_calls: list = None):
         return super().model_construct(role="assistant", content=content, **filter_none(tool_calls=tool_calls))
 
+    def save(self, filepath: str, allowd_types = None):
+        if self.content.startswith("data:"):
+            with open(filepath, "wb") as f:
+                f.write(extract_data_uri(self.content))
+            return
+        content = filter_markdown(self.content, allowd_types)
+        if content is not None:
+            with open(filepath, "w") as f:
+                f.write(content)
+
 class ChatCompletionChoice(BaseModel):
     index: int
     message: ChatCompletionMessage
@@ -118,8 +130,9 @@ class ChatCompletion(BaseModel):
     created: int
     model: str
     provider: Optional[str]
-    choices: List[ChatCompletionChoice]
+    choices: list[ChatCompletionChoice]
     usage: UsageModel
+    conversation: dict
 
     @classmethod
     def model_construct(
@@ -129,7 +142,8 @@ class ChatCompletion(BaseModel):
         completion_id: str = None,
         created: int = None,
         tool_calls: list[ToolCallModel] = None,
-        usage: UsageModel = None
+        usage: UsageModel = None,
+        conversation: dict = None
     ):
         return super().model_construct(
             id=f"chatcmpl-{completion_id}" if completion_id else None,
@@ -141,7 +155,7 @@ class ChatCompletion(BaseModel):
                 ChatCompletionMessage.model_construct(content, tool_calls),
                 finish_reason,
             )],
-            **filter_none(usage=usage)
+            **filter_none(usage=usage, conversation=conversation)
         )
 
 class ChatCompletionDelta(BaseModel):

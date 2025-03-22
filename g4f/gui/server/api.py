@@ -67,6 +67,7 @@ class Api:
             "image": bool(getattr(provider, "image_models", False)),
             "vision": getattr(provider, "default_vision_model", None) is not None,
             "nodriver": getattr(provider, "use_nodriver", False),
+            "hf_space": getattr(provider, "hf_space", False),
             "auth": provider.needs_auth,
             "login_url": getattr(provider, "login_url", None),
         } for provider in __providers__ if provider.working]
@@ -89,25 +90,17 @@ class Api:
         ensure_images_dir()
         return send_from_directory(os.path.abspath(images_dir), name)
 
-    def _prepare_conversation_kwargs(self, json_data: dict, kwargs: dict):
+    def _prepare_conversation_kwargs(self, json_data: dict):
+        kwargs = {**json_data}
         model = json_data.get('model')
         provider = json_data.get('provider')
         messages = json_data.get('messages')
-        api_key = json_data.get("api_key")
-        if api_key:
-            kwargs["api_key"] = api_key
-        api_base = json_data.get("api_base")
-        if api_base:
-            kwargs["api_base"] = api_base
         kwargs["tool_calls"] = [{
             "function": {
                 "name": "bucket_tool"
             },
             "type": "function"
         }]
-        web_search = json_data.get('web_search')
-        if web_search:
-            kwargs["web_search"] = web_search
         action = json_data.get('action')
         if action == "continue":
             kwargs["tool_calls"].append({
@@ -117,19 +110,13 @@ class Api:
                 "type": "function"
             })
         conversation = json_data.get("conversation")
-        if conversation is not None:
+        if isinstance(conversation, dict):
             kwargs["conversation"] = JsonConversation(**conversation)
         else:
             conversation_id = json_data.get("conversation_id")
             if conversation_id and provider:
                 if provider in conversations and conversation_id in conversations[provider]:
                     kwargs["conversation"] = conversations[provider][conversation_id]
-
-        if json_data.get("ignored"):
-            kwargs["ignored"] = json_data["ignored"]
-        if json_data.get("action"):
-            kwargs["action"] = json_data["action"]
-
         return {
             "model": model,
             "provider": provider,
@@ -154,7 +141,7 @@ class Api:
                 stream=True,
                 ignore_stream=True,
                 logging=False,
-                has_images="images" in kwargs,
+                has_images="media" in kwargs,
             )
         except Exception as e:
             debug.error(e)
@@ -216,6 +203,10 @@ class Api:
                     yield self._format_json("usage", chunk.get_dict())
                 elif isinstance(chunk, Reasoning):
                     yield self._format_json("reasoning", **chunk.get_dict())
+                elif isinstance(chunk, YouTube):
+                    yield self._format_json("content", chunk.to_string())
+                elif isinstance(chunk, Audio):
+                    yield self._format_json("audio", str(chunk))
                 elif isinstance(chunk, DebugResponse):
                     yield self._format_json("log", chunk.log)
                 elif isinstance(chunk, RawResponse):

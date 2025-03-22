@@ -10,7 +10,8 @@ from ..base_provider import AsyncGeneratorProvider, ProviderModelMixin
 from ..helper import format_image_prompt
 from .raise_for_status import raise_for_status
 
-class BlackForestLabsFlux1Schnell(AsyncGeneratorProvider, ProviderModelMixin):
+class BlackForestLabs_Flux1Schnell(AsyncGeneratorProvider, ProviderModelMixin):
+    label = "BlackForestLabs Flux-1-Schnell"
     url = "https://black-forest-labs-flux-1-schnell.hf.space"
     api_endpoint = "https://black-forest-labs-flux-1-schnell.hf.space/call/infer"
     
@@ -18,8 +19,8 @@ class BlackForestLabsFlux1Schnell(AsyncGeneratorProvider, ProviderModelMixin):
     
     default_model = "black-forest-labs-flux-1-schnell"
     default_image_model = default_model
-    model_aliases = {"flux-schnell": default_model, "flux": default_model}
-    image_models = [default_image_model, *model_aliases.keys()]
+    model_aliases = {"flux-schnell": default_image_model, "flux": default_image_model}
+    image_models = list(model_aliases.keys())
     models = image_models
 
     @classmethod

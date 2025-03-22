@@ -9,25 +9,23 @@ from ..base_provider import AsyncGeneratorProvider, ProviderModelMixin
 from ..helper import format_prompt, get_last_user_message
 from ...providers.response import JsonConversation, TitleGeneration
 
-class CohereForAI(AsyncGeneratorProvider, ProviderModelMixin):
+class CohereForAI_C4AI_Command(AsyncGeneratorProvider, ProviderModelMixin):
+    label = "CohereForAI C4AI Command"
     url = "https://cohereforai-c4ai-command.hf.space"
     conversation_url = f"{url}/conversation"
 
     working = True
 
-    default_model = "command-r-plus-08-2024"
-    models = [
-        default_model,
-        "command-r-08-2024",
-        "command-r-plus",
-        "command-r",
-        "command-r7b-12-2024",
-    ]
+    default_model = "command-a-03-2025"
     model_aliases = {
+        "command-a": default_model,
         "command-r-plus": "command-r-plus-08-2024",
         "command-r": "command-r-08-2024",
+        "command-r": "command-r",
         "command-r7b": "command-r7b-12-2024",
     }
+    
+    models = list(model_aliases.keys())
 
     @classmethod
     async def create_async_generator(

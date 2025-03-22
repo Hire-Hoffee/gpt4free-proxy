@@ -25,16 +25,16 @@ from .. import debug
 
 SAFE_PARAMETERS = [
     "model", "messages", "stream", "timeout",
-    "proxy", "images", "response_format",
+    "proxy", "media", "response_format",
     "prompt", "negative_prompt", "tools", "conversation",
-    "history_disabled", "auto_continue",
+    "history_disabled",
     "temperature",  "top_k", "top_p",
     "frequency_penalty", "presence_penalty",
-    "max_tokens", "max_new_tokens", "stop",
+    "max_tokens", "stop",
     "api_key", "api_base", "seed", "width", "height",
-    "proof_token", "max_retries", "web_search",
+    "max_retries", "web_search",
     "guidance_scale", "num_inference_steps", "randomize_seed",
-    "safe", "enhance", "private",
+    "safe", "enhance", "private", "aspect_ratio", "n",
 ]
 
 BASIC_PARAMETERS = {
@@ -44,8 +44,8 @@ BASIC_PARAMETERS = {
     "stream": False,
     "timeout": 0,
     "response_format": None,
-    "max_tokens": None,
-    "stop": None,
+    "max_tokens": 4096,
+    "stop": ["stop1", "stop2"],
 }
 
 PARAMETER_EXAMPLES = {
@@ -56,13 +56,10 @@ PARAMETER_EXAMPLES = {
     "frequency_penalty": 1,
     "presence_penalty": 1,
     "messages": [{"role": "system", "content": ""}, {"role": "user", "content": ""}],
-    "images": [["data:image/jpeg;base64,...", "filename.jpg"]],
+    "media": [["data:image/jpeg;base64,...", "filename.jpg"]],
     "response_format": {"type": "json_object"},
     "conversation": {"conversation_id": "550e8400-e29b-11d4-a716-...", "message_id": "550e8400-e29b-11d4-a716-..."},
-    "max_new_tokens": 1024,
-    "max_tokens": 4096,
     "seed": 42,
-    "stop": ["stop1", "stop2"],
     "tools": [],
 }
 
@@ -386,7 +383,13 @@ class RaiseErrorMixin():
         elif ("choices" not in data or not data["choices"]) and "data" not in data:
             raise ResponseError(f"Invalid response: {json.dumps(data)}")
 
-class AsyncAuthedProvider(AsyncGeneratorProvider):
+class AuthFileMixin():
+
+    @classmethod
+    def get_cache_file(cls) -> Path:
+        return Path(get_cookies_dir()) / f"auth_{cls.parent if hasattr(cls, 'parent') else cls.__name__}.json"
+
+class AsyncAuthedProvider(AsyncGeneratorProvider, AuthFileMixin):
 
     @classmethod
     async def on_auth_async(cls, **kwargs) -> AuthResult:
@@ -408,10 +411,6 @@ class AsyncAuthedProvider(AsyncGeneratorProvider):
     @classmethod
     def get_async_create_function(cls) -> callable:
         return cls.create_async_generator
-
-    @classmethod
-    def get_cache_file(cls) -> Path:
-        return Path(get_cookies_dir()) / f"auth_{cls.parent if hasattr(cls, 'parent') else cls.__name__}.json"
 
     @classmethod
     def write_cache_file(cls, cache_file: Path, auth_result: AuthResult = None):

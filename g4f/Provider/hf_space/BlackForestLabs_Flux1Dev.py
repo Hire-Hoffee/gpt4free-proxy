@@ -9,10 +9,11 @@ from ...requests import StreamSession
 from ...errors import ResponseError
 from ..base_provider import AsyncGeneratorProvider, ProviderModelMixin
 from ..helper import format_image_prompt
-from .Janus_Pro_7B import get_zerogpu_token
+from .DeepseekAI_JanusPro7b import get_zerogpu_token
 from .raise_for_status import raise_for_status
 
-class BlackForestLabsFlux1Dev(AsyncGeneratorProvider, ProviderModelMixin):
+class BlackForestLabs_Flux1Dev(AsyncGeneratorProvider, ProviderModelMixin):
+    label = "BlackForestLabs Flux-1-Dev"
     url = "https://black-forest-labs-flux-1-dev.hf.space"
     space = "black-forest-labs/FLUX.1-dev"
     referer = f"{url}/?__theme=light"
@@ -21,8 +22,8 @@ class BlackForestLabsFlux1Dev(AsyncGeneratorProvider, ProviderModelMixin):
 
     default_model = 'black-forest-labs-flux-1-dev'
     default_image_model = default_model
-    model_aliases = {"flux-dev": default_model, "flux": default_model}
-    image_models = [default_image_model, *model_aliases.keys()]
+    model_aliases = {"flux-dev": default_image_model, "flux": default_image_model}
+    image_models = list(model_aliases.keys())
     models = image_models
 
     @classmethod

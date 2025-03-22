@@ -19,7 +19,7 @@ except ImportError:
     has_nodriver = False
 
 from ... import debug
-from ...typing import Messages, Cookies, ImagesType, AsyncResult, AsyncIterator
+from ...typing import Messages, Cookies, MediaListType, AsyncResult, AsyncIterator
 from ...providers.response import JsonConversation, Reasoning, RequestLogin, ImageResponse, YouTube
 from ...requests.raise_for_status import raise_for_status
 from ...requests.aiohttp import get_connector
@@ -149,7 +149,7 @@ class Gemini(AsyncGeneratorProvider, ProviderModelMixin):
         proxy: str = None,
         cookies: Cookies = None,
         connector: BaseConnector = None,
-        images: ImagesType = None,
+        media: MediaListType = None,
         return_conversation: bool = False,
         conversation: Conversation = None,
         language: str = "en",
@@ -186,7 +186,7 @@ class Gemini(AsyncGeneratorProvider, ProviderModelMixin):
                         cls.start_auto_refresh()
                     )
 
-            images = await cls.upload_images(base_connector, images) if images else None
+            uploads = None if media is None else await cls.upload_images(base_connector, media)
             async with ClientSession(
                 cookies=cls._cookies,
                 headers=REQUEST_HEADERS,
@@ -205,7 +205,7 @@ class Gemini(AsyncGeneratorProvider, ProviderModelMixin):
                         prompt,
                         language=language,
                         conversation=conversation,
-                        images=images
+                        uploads=uploads
                     ))])
                 }
                 async with client.post(
@@ -250,12 +250,12 @@ class Gemini(AsyncGeneratorProvider, ProviderModelMixin):
                                 return f"![](https:{match.group(0)})"
                             reasoning = re.sub(r"//yt3.(?:ggpht.com|googleusercontent.com/ytc)/[\w=-]+", replace_image, reasoning)
                             reasoning = re.sub(r"\nyoutube\n", "\n\n\n", reasoning)
+                            reasoning = re.sub(r"\nyoutube_tool\n", "\n\n", reasoning)
                             reasoning = re.sub(r"\nYouTube\n", "\nYouTube ", reasoning)
-                            reasoning = reasoning.replace('https://www.gstatic.com/images/branding/productlogos/youtube/v9/192px.svg', '<i class="fa-brands fa-youtube"></i>')
+                            reasoning = reasoning.replace('\nhttps://www.gstatic.com/images/branding/productlogos/youtube/v9/192px.svg', '<i class="fa-brands fa-youtube"></i>')
                             content = response_part[4][0][1][0]
                             if reasoning:
-                                yield Reasoning(status="🤔")
-                                yield Reasoning(reasoning)
+                                yield Reasoning(reasoning, status="🤔")
                         except (ValueError, KeyError, TypeError, IndexError) as e:
                             debug.error(f"{cls.__name__} {type(e).__name__}: {e}")
                             continue
@@ -283,7 +283,7 @@ class Gemini(AsyncGeneratorProvider, ProviderModelMixin):
                             except (TypeError, IndexError, KeyError):
                                 pass
                         youtube_ids = []
-                        pattern = re.compile(r"http://www.youtube.com/watch\?v=(\w+)")
+                        pattern = re.compile(r"http://www.youtube.com/watch\?v=([\w-]+)")
                         for match in pattern.finditer(content):
                             if match.group(1) not in youtube_ids:
                                 youtube_ids.append(match.group(1))
@@ -327,10 +327,10 @@ class Gemini(AsyncGeneratorProvider, ProviderModelMixin):
         prompt: str,
         language: str,
         conversation: Conversation = None,
-        images: list[list[str, str]] = None,
+        uploads: list[list[str, str]] = None,
         tools: list[list[str]] = []
     ) -> list:
-        image_list = [[[image_url, 1], image_name] for image_url, image_name in images] if images else []
+        image_list = [[[image_url, 1], image_name] for image_url, image_name in uploads] if uploads else []
         return [
             [prompt, 0, None, image_list, None, None, 0],
             [language],
@@ -353,7 +353,7 @@ class Gemini(AsyncGeneratorProvider, ProviderModelMixin):
             0,
         ]
 
-    async def upload_images(connector: BaseConnector, images: ImagesType) -> list:
+    async def upload_images(connector: BaseConnector, media: MediaListType) -> list:
         async def upload_image(image: bytes, image_name: str = None):
             async with ClientSession(
                 headers=UPLOAD_IMAGE_HEADERS,
@@ -385,7 +385,7 @@ class Gemini(AsyncGeneratorProvider, ProviderModelMixin):
                 ) as response:
                     await raise_for_status(response)
                     return [await response.text(), image_name]
-        return await asyncio.gather(*[upload_image(image, image_name) for image, image_name in images])
+        return await asyncio.gather(*[upload_image(image, image_name) for image, image_name in media])
 
     @classmethod
     async def fetch_snlm0e(cls, session: ClientSession, cookies: Cookies):

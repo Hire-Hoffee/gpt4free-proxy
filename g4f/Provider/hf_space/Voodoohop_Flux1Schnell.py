@@ -10,7 +10,8 @@ from ...requests.raise_for_status import raise_for_status
 from ..helper import format_image_prompt
 from ..base_provider import AsyncGeneratorProvider, ProviderModelMixin
 
-class VoodoohopFlux1Schnell(AsyncGeneratorProvider, ProviderModelMixin):
+class Voodoohop_Flux1Schnell(AsyncGeneratorProvider, ProviderModelMixin):
+    label = "Voodoohop Flux-1-Schnell"
     url = "https://voodoohop-flux-1-schnell.hf.space"
     api_endpoint = "https://voodoohop-flux-1-schnell.hf.space/call/infer"
 
@@ -19,7 +20,7 @@ class VoodoohopFlux1Schnell(AsyncGeneratorProvider, ProviderModelMixin):
     default_model = "voodoohop-flux-1-schnell"
     default_image_model = default_model
     model_aliases = {"flux-schnell": default_model, "flux": default_model}
-    image_models = [default_image_model, *model_aliases.keys()]
+    image_models = list(model_aliases.keys())
     models = image_models
 
     @classmethod

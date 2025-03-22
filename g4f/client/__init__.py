@@ -162,14 +162,15 @@ async def async_iter_response(
     tool_calls = None
     usage = None
     provider: ProviderInfo = None
+    conversation: JsonConversation = None
 
     try:
         async for chunk in response:
             if isinstance(chunk, FinishReason):
                 finish_reason = chunk.reason
                 break
-            elif isinstance(chunk, BaseConversation):
-                yield chunk
+            elif isinstance(chunk, JsonConversation):
+                conversation = chunk
                 continue
             elif isinstance(chunk, ToolCalls):
                 tool_calls = chunk.get_list()
@@ -228,7 +229,8 @@ async def async_iter_response(
                 content, finish_reason, completion_id, int(time.time()), usage=usage,
                 **filter_none(
                     tool_calls=[ToolCallModel.model_construct(**tool_call) for tool_call in tool_calls]
-                ) if tool_calls is not None else {}
+                ) if tool_calls is not None else {},
+                conversation=None if conversation is None else conversation.get_dict()
             )
         if provider is not None:
             chat_completion.provider = provider.name
@@ -242,7 +244,6 @@ async def async_iter_append_model_and_provider(
         last_model: str,
         last_provider: ProviderType
     ) -> AsyncChatCompletionResponseType:
-    last_provider = None
     try:
         if isinstance(last_provider, BaseRetryProvider):
             async for chunk in response:
@@ -276,7 +277,7 @@ class Completions:
     def create(
         self,
         messages: Messages,
-        model: str,
+        model: str = "",
         provider: Optional[ProviderType] = None,
         stream: Optional[bool] = False,
         proxy: Optional[str] = None,
@@ -290,15 +291,19 @@ class Completions:
         ignore_stream: Optional[bool] = False,
         **kwargs
     ) -> ChatCompletion:
+        if isinstance(messages, str):
+            messages = [{"role": "user", "content": messages}]
         if image is not None:
-            kwargs["images"] = [(image, image_name)]
+            kwargs["media"] = [(image, image_name)]
+        elif "images" in kwargs:
+            kwargs["media"] = kwargs.pop("images")
         model, provider = get_model_and_provider(
             model,
             self.provider if provider is None else provider,
             stream,
             ignore_working,
             ignore_stream,
-            has_images="images" in kwargs
+            has_images="media" in kwargs
         )
         stop = [stop] if isinstance(stop, str) else stop
         if ignore_stream:
@@ -328,7 +333,7 @@ class Completions:
     def stream(
         self,
         messages: Messages,
-        model: str,
+        model: str = "",
         **kwargs
     ) -> IterResponse:
         return self.create(messages, model, stream=True, **kwargs)
@@ -479,7 +484,7 @@ class Images:
             proxy = self.client.proxy
         prompt = "create a variation of this image"
         if image is not None:
-            kwargs["images"] = [(image, None)]
+            kwargs["media"] = [(image, None)]
 
         error = None
         response = None
@@ -562,7 +567,7 @@ class AsyncCompletions:
     def create(
         self,
         messages: Messages,
-        model: str,
+        model: str = "",
         provider: Optional[ProviderType] = None,
         stream: Optional[bool] = False,
         proxy: Optional[str] = None,
@@ -576,15 +581,19 @@ class AsyncCompletions:
         ignore_stream: Optional[bool] = False,
         **kwargs
     ) -> Awaitable[ChatCompletion]:
+        if isinstance(messages, str):
+            messages = [{"role": "user", "content": messages}]
         if image is not None:
-            kwargs["images"] = [(image, image_name)]
+            kwargs["media"] = [(image, image_name)]
+        elif "images" in kwargs:
+            kwargs["media"] = kwargs.pop("images")
         model, provider = get_model_and_provider(
             model,
             self.provider if provider is None else provider,
             stream,
             ignore_working,
             ignore_stream,
-            has_images="images" in kwargs,
+            has_images="media" in kwargs,
         )
         stop = [stop] if isinstance(stop, str) else stop
         if ignore_stream:
@@ -615,7 +624,7 @@ class AsyncCompletions:
     def stream(
         self,
         messages: Messages,
-        model: str,
+        model: str = "",
         **kwargs
     ) -> AsyncIterator[ChatCompletionChunk]:
         return self.create(messages, model, stream=True, **kwargs)

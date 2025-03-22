@@ -9,7 +9,8 @@ from ...errors import ResponseError
 from ..base_provider import AsyncGeneratorProvider, ProviderModelMixin
 from ..helper import format_image_prompt
 
-class StableDiffusion35Large(AsyncGeneratorProvider, ProviderModelMixin):
+class StabilityAI_SD35Large(AsyncGeneratorProvider, ProviderModelMixin):
+    label = "StabilityAI SD-3.5-Large"
     url = "https://stabilityai-stable-diffusion-3-5-large.hf.space"
     api_endpoint = "/gradio_api/call/infer"
 
@@ -17,9 +18,9 @@ class StableDiffusion35Large(AsyncGeneratorProvider, ProviderModelMixin):
 
     default_model = 'stabilityai-stable-diffusion-3-5-large'
     default_image_model = default_model
-    image_models = [default_model]
-    models = image_models
     model_aliases = {"sd-3.5": default_model}
+    image_models = list(model_aliases.keys())
+    models = image_models
 
     @classmethod
     async def create_async_generator(
