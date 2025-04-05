@@ -24,8 +24,9 @@ from .openai.har_file import get_headers, get_har_files
 from ..typing import CreateResult, Messages, MediaListType
 from ..errors import MissingRequirementsError, NoValidHarFileError, MissingAuthError
 from ..requests.raise_for_status import raise_for_status
-from ..providers.response import BaseConversation, JsonConversation, RequestLogin, Parameters, ImageResponse
+from ..providers.response import BaseConversation, JsonConversation, RequestLogin, ImageResponse, FinishReason, SuggestedFollowups
 from ..providers.asyncio import get_running_loop
+from ..tools.media import merge_media
 from ..requests import get_nodriver
 from ..image import to_bytes, is_accepted_format
 from .helper import get_last_user_message
@@ -45,10 +46,13 @@ class Copilot(AbstractProvider, ProviderModelMixin):
     supports_stream = True
     
     default_model = "Copilot"
-    models = [default_model]
+    models = [default_model, "Think Deeper"]
     model_aliases = {
         "gpt-4": default_model,
-        "o1": default_model,
+        "gpt-4o": default_model,
+        "o1": "Think Deeper",
+        "reasoning": "Think Deeper",
+        "dall-e-3": default_model
     }
 
     websocket_url = "wss://copilot.microsoft.com/c/api/chat?api-version=2"
@@ -74,10 +78,10 @@ class Copilot(AbstractProvider, ProviderModelMixin):
     ) -> CreateResult:
         if not has_curl_cffi:
             raise MissingRequirementsError('Install or update "curl_cffi" package | pip install -U curl_cffi')
-
+        model = cls.get_model(model)
         websocket_url = cls.websocket_url
         headers = None
-        if cls.needs_auth or media is not None:
+        if cls._access_token:
             if api_key is not None:
                 cls._access_token = api_key
             if cls._access_token is None:
@@ -142,17 +146,18 @@ class Copilot(AbstractProvider, ProviderModelMixin):
                 debug.log(f"Copilot: Use conversation: {conversation_id}")
 
             uploaded_images = []
-            if media is not None:
-                for image, _ in media:
-                    data = to_bytes(image)
+            media, _ = [(None, None), *merge_media(media, messages)].pop()
+            if media:
+                if not isinstance(media, str):
+                    data = to_bytes(media)
                     response = session.post(
                         "https://copilot.microsoft.com/c/api/attachments",
                         headers={"content-type": is_accepted_format(data)},
                         data=data
                     )
                     raise_for_status(response)
-                    uploaded_images.append({"type":"image", "url": response.json().get("url")})
-                    break
+                    media = response.json().get("url")
+                uploaded_images.append({"type":"image", "url": media})
 
             wss = session.ws_connect(cls.websocket_url)
             # if clarity_token is not None:
@@ -161,6 +166,7 @@ class Copilot(AbstractProvider, ProviderModelMixin):
             #         "token": clarity_token,
             #         "method":"clarity"
             #     }).encode(), CurlWsFlag.TEXT)
+            wss.send(json.dumps({"event":"setOptions","supportedCards":["weather","local","image","sports","video","ads","finance"],"ads":{"supportedTypes":["multimedia","product","tourActivity","propertyPromotion","text"]}}));
             wss.send(json.dumps({
                 "event": "send",
                 "conversationId": conversation_id,
@@ -168,7 +174,7 @@ class Copilot(AbstractProvider, ProviderModelMixin):
                     "type": "text",
                     "text": prompt,
                 }],
-                "mode": "chat"
+                "mode": "reasoning" if "Think" in model else "chat",
             }).encode(), CurlWsFlag.TEXT)
 
             is_started = False
@@ -191,6 +197,10 @@ class Copilot(AbstractProvider, ProviderModelMixin):
                     elif msg.get("event") == "imageGenerated":
                         yield ImageResponse(msg.get("url"), image_prompt, {"preview": msg.get("thumbnailUrl")})
                     elif msg.get("event") == "done":
+                        yield FinishReason("stop")
+                        break
+                    elif msg.get("event") == "suggestedFollowups":
+                        yield SuggestedFollowups(msg.get("suggestions"))
                         break
                     elif msg.get("event") == "replaceText":
                         yield msg.get("text")

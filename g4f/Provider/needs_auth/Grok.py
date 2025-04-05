@@ -30,6 +30,7 @@ class Grok(AsyncAuthedProvider, ProviderModelMixin):
 
     default_model = "grok-3"
     models = [default_model, "grok-3-thinking", "grok-2"]
+    model_aliases = {"grok-3-r1": "grok-3-thinking"}
 
     @classmethod
     async def on_auth_async(cls, cookies: Cookies = None, proxy: str = None, **kwargs) -> AsyncIterator:
@@ -73,7 +74,7 @@ class Grok(AsyncAuthedProvider, ProviderModelMixin):
             "sendFinalMetadata": True,
             "customInstructions": "",
             "deepsearchPreset": "",
-            "isReasoning": model.endswith("-thinking"),
+            "isReasoning": model.endswith("-thinking") or model.endswith("-r1"),
         }
 
     @classmethod
@@ -82,7 +83,6 @@ class Grok(AsyncAuthedProvider, ProviderModelMixin):
         model: str,
         messages: Messages,
         auth_result: AuthResult,
-        cookies: Cookies = None,
         return_conversation: bool = False,
         conversation: Conversation = None,
         **kwargs
@@ -129,7 +129,7 @@ class Grok(AsyncAuthedProvider, ProviderModelMixin):
                                     yield token
                             generated_images = response_data.get("modelResponse", {}).get("generatedImageUrls", None)
                             if generated_images:
-                                yield ImageResponse([f'{cls.assets_url}/{image}' for image in generated_images], "", {"cookies": cookies, "headers": headers})
+                                yield ImageResponse([f'{cls.assets_url}/{image}' for image in generated_images], "", {"cookies": auth_result.cookies, "headers": auth_result.headers})
                             title = result.get("title", {}).get("newTitle", "")
                             if title:
                                 yield TitleGeneration(title)

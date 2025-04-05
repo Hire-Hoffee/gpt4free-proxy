@@ -36,14 +36,16 @@ class PollinationsImage(PollinationsAI):
         messages: Messages,
         proxy: str = None,
         prompt: str = None,
-        width: int = 1024,
-        height: int = 1024,
+        aspect_ratio: str = "1:1",
+        width: int = None,
+        height: int = None,
         seed: Optional[int] = None,
         cache: bool = False,
         nologo: bool = True,
         private: bool = False,
         enhance: bool = False,
         safe: bool = False,
+        n: int = 4,
         **kwargs
     ) -> AsyncResult:
         # Calling model updates before creating a generator
@@ -52,6 +54,7 @@ class PollinationsImage(PollinationsAI):
             model=model,
             prompt=format_image_prompt(messages, prompt),
             proxy=proxy,
+            aspect_ratio=aspect_ratio,
             width=width,
             height=height,
             seed=seed,
@@ -59,6 +62,7 @@ class PollinationsImage(PollinationsAI):
             nologo=nologo,
             private=private,
             enhance=enhance,
-            safe=safe
+            safe=safe,
+            n=n
         ):
             yield chunk

@@ -25,7 +25,8 @@ from ...requests import get_nodriver
 from ...image import ImageRequest, to_image, to_bytes, is_accepted_format
 from ...errors import MissingAuthError, NoValidHarFileError
 from ...providers.response import JsonConversation, FinishReason, SynthesizeData, AuthResult, ImageResponse
-from ...providers.response import Sources, TitleGeneration, RequestLogin, Parameters, Reasoning
+from ...providers.response import Sources, TitleGeneration, RequestLogin, Reasoning
+from ...tools.media import merge_media
 from ..helper import format_cookies, get_last_user_message
 from ..openai.models import default_model, default_image_model, models, image_models, text_models
 from ..openai.har_file import get_request_config
@@ -141,6 +142,7 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
             An ImageRequest object that contains the download URL, file name, and other data
         """
         async def upload_image(image, image_name):
+            debug.log(f"Uploading image: {image_name}")
             # Convert the image to a PIL Image object and get the extension
             data_bytes = to_bytes(image)
             image = to_image(data_bytes)
@@ -187,8 +189,6 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
                 await raise_for_status(response, "Get download url failed")
                 image_data["download_url"] = (await response.json())["download_url"]
             return ImageRequest(image_data)
-        if not media:
-            return
         return [await upload_image(image, image_name) for image, image_name in media]
 
     @classmethod
@@ -203,7 +203,21 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
         Returns:
             A list of messages with the user input and the image, if any
         """
-        # Create a message object with the user role and the content
+        # merged_messages = []
+        # last_message = None
+        # for message in messages:
+        #     current_message = last_message
+        #     if current_message is not None:
+        #         if current_message["role"] == message["role"]:
+        #             current_message["content"] += "\n" + message["content"]
+        #         else:
+        #             merged_messages.append(current_message)
+        #             last_message = message.copy()
+        #     else:
+        #         last_message = message.copy()
+        # if last_message is not None:
+        #     merged_messages.append(last_message)
+
         messages = [{
             "id": str(uuid.uuid4()),
             "author": {"role": message["role"]},
@@ -316,7 +330,7 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
                     cls._update_request_args(auth_result, session)
                     await raise_for_status(response)
                 try:
-                    image_requests = None if media is None else await cls.upload_images(session, auth_result, media)
+                    image_requests = await cls.upload_images(session, auth_result, merge_media(media, messages))
                 except Exception as e:
                     debug.error("OpenaiChat: Upload image failed")
                     debug.error(e)
@@ -370,7 +384,7 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
                     #f"Proofofwork: {'False' if proofofwork is None else proofofwork[:12]+'...'}",
                     #f"AccessToken: {'False' if cls._api_key is None else cls._api_key[:12]+'...'}",
                 )]
-                if action == "continue" and conversation.message_id is None:
+                if action is None or action == "variant" or action == "continue" and conversation.message_id is None:
                     action = "next"
                 data = {
                     "action": action,

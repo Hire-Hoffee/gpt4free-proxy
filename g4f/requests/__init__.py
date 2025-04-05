@@ -134,6 +134,7 @@ def merge_cookies(cookies: Iterator[Morsel], response: Response) -> Cookies:
     else:
         for key, value in response.cookies.items():
             cookies[key] = value
+    return cookies
 
 async def get_nodriver(
     proxy: str = None,
@@ -154,6 +155,7 @@ async def get_nodriver(
             if not os.path.exists(browser_executable_path):
                 browser_executable_path = None
     lock_file = Path(get_cookies_dir()) / ".nodriver_is_open"
+    lock_file.parent.mkdir(exist_ok=True)
     # Implement a short delay (milliseconds) to prevent race conditions.
     await asyncio.sleep(0.1 * random.randint(0, 50))
     if lock_file.exists():

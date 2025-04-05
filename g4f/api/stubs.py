@@ -51,6 +51,7 @@ class ChatCompletionsConfig(BaseModel):
     modalities: Optional[list[str]] = None
     audio: Optional[dict] = None
     response_format: Optional[dict] = None
+    extra_data: Optional[dict] = None
 
 class ImageGenerationConfig(BaseModel):
     prompt: str
@@ -67,6 +68,7 @@ class ImageGenerationConfig(BaseModel):
     aspect_ratio: Optional[str] = None
     n: Optional[int] = None
     negative_prompt: Optional[str] = None
+    resolution: Optional[str] = None
 
 class ProviderResponseModel(BaseModel):
     id: str

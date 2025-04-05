@@ -14,7 +14,7 @@ WS_URL = "wss://www.perplexity.ai/socket.io/"
 
 class PerplexityLabs(AsyncGeneratorProvider, ProviderModelMixin):
     url = "https://labs.perplexity.ai"
-    working = False
+    working = True
 
     default_model = "r1-1776"
     models = [
@@ -68,7 +68,7 @@ class PerplexityLabs(AsyncGeneratorProvider, ProviderModelMixin):
                     "version": "2.18",
                     "source": "default",
                     "model": model,
-                    "messages": messages,
+                    "messages": [message for message in messages if isinstance(message["content"], str)],
                 }
                 await ws.send_str("42" + json.dumps(["perplexity_labs", message_data]))
                 last_message = 0

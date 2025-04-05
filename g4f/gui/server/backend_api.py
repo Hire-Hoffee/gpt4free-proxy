@@ -9,22 +9,23 @@ import shutil
 import random
 import datetime
 import tempfile
-from flask import Flask, Response, request, jsonify, render_template, send_from_directory
+from flask import Flask, Response, redirect, request, jsonify, render_template, send_from_directory
+from werkzeug.exceptions import NotFound
 from typing import Generator
 from pathlib import Path
 from urllib.parse import quote_plus
 from hashlib import sha256
-from werkzeug.utils import secure_filename
 
-from ...image import is_allowed_extension, to_image
 from ...client.service import convert_to_provider
 from ...providers.asyncio import to_sync_generator
+from ...providers.response import FinishReason
 from ...client.helper import filter_markdown
 from ...tools.files import supports_filename, get_streaming, get_bucket_dir, get_buckets
 from ...tools.run_tools import iter_run_tools
 from ...errors import ProviderNotFoundError
 from ...image import is_allowed_extension
 from ...cookies import get_cookies_dir
+from ...image.copy_images import secure_filename, get_source_url, images_dir
 from ... import ChatCompletion
 from ... import models
 from .api import Api
@@ -57,33 +58,34 @@ class Backend_Api(Api):
             app (Flask): Flask application instance to attach routes to.
         """
         self.app: Flask = app
+        self.chat_cache = {}
 
         if app.demo:
             @app.route('/', methods=['GET'])
             def home():
-                return render_template('demo.html', backend_url=os.environ.get("G4F_BACKEND_URL", ""))
+                client_id = os.environ.get("OAUTH_CLIENT_ID", "ed074164-4f8d-4fb2-8bec-44952707965e")
+                backend_url = os.environ.get("G4F_BACKEND_URL", "")
+                return render_template('demo.html', backend_url=backend_url, client_id=client_id)
         else:
             @app.route('/', methods=['GET'])
             def home():
                 return render_template('home.html')
 
         @app.route('/qrcode', methods=['GET'])
-        def qrcode():
-            return render_template('qrcode.html')
+        @app.route('/qrcode/<conversation_id>', methods=['GET'])
+        def qrcode(conversation_id: str = ""):
+            share_url = os.environ.get("G4F_SHARE_URL", "")
+            return render_template('qrcode.html', conversation_id=conversation_id, share_url=share_url)
 
         @app.route('/backend-api/v2/models', methods=['GET'])
         def jsonify_models(**kwargs):
             response = get_demo_models() if app.demo else self.get_models(**kwargs)
-            if isinstance(response, list):
-                return jsonify(response)
-            return response
+            return jsonify(response)
 
         @app.route('/backend-api/v2/models/<provider>', methods=['GET'])
         def jsonify_provider_models(**kwargs):
             response = self.get_provider_models(**kwargs)
-            if isinstance(response, list):
-                return jsonify(response)
-            return response
+            return jsonify(response)
 
         @app.route('/backend-api/v2/providers', methods=['GET'])
         def jsonify_providers(**kwargs):
@@ -130,16 +132,14 @@ class Backend_Api(Api):
                 if model != "default" and model in models.demo_models:
                     json_data["provider"] = random.choice(models.demo_models[model][1])
                 else:
-                    if not model or model == "default":
-                        json_data["model"] = models.demo_models["default"][0].name
-                    json_data["provider"] = random.choice(models.demo_models["default"][1])
+                    json_data["provider"] = models.HuggingFace
             kwargs = self._prepare_conversation_kwargs(json_data)
             return self.app.response_class(
                 self._create_response_stream(
                     kwargs,
                     json_data.get("conversation_id"),
                     json_data.get("provider"),
-                    json_data.get("download_images", True),
+                    json_data.get("download_media", True),
                 ),
                 mimetype='text/event-stream'
             )
@@ -211,6 +211,10 @@ class Backend_Api(Api):
             '/images/<path:name>': {
                 'function': self.serve_images,
                 'methods': ['GET']
+            },
+            '/media/<path:name>': {
+                'function': self.serve_images,
+                'methods': ['GET']
             }
         }
 
@@ -252,9 +256,11 @@ class Backend_Api(Api):
                     else:
                         response = iter_run_tools(ChatCompletion.create, **parameters)
                         cache_dir.mkdir(parents=True, exist_ok=True)
+                        copy_response = [chunk for chunk in response]
                         with cache_file.open("w") as f:
-                            for chunk in response:
+                            for chunk in copy_response:
                                 f.write(str(chunk))
+                        response = copy_response
                 else:
                     response = iter_run_tools(ChatCompletion.create, **parameters)
 
@@ -262,23 +268,14 @@ class Backend_Api(Api):
                     return Response(filter_markdown("".join([str(chunk) for chunk in response]), do_filter_markdown), mimetype='text/plain')
                 def cast_str():
                     for chunk in response:
-                        if not isinstance(chunk, Exception):
+                        if isinstance(chunk, FinishReason):
+                            yield f"[{chunk.reason}]" if chunk.reason != "stop" else ""
+                        elif not isinstance(chunk, Exception):
                             yield str(chunk)
                 return Response(cast_str(), mimetype='text/plain')
             except Exception as e:
                 logger.exception(e)
                 return jsonify({"error": {"message": f"{type(e).__name__}: {e}"}}), 500
-
-        @app.route('/backend-api/v2/buckets', methods=['GET'])
-        def list_buckets():
-            try:
-                buckets = get_buckets()
-                if buckets is None:
-                    return jsonify({"error": {"message": "Error accessing bucket directory"}}), 500
-                sanitized_buckets = [secure_filename(b) for b in buckets]
-                return jsonify(sanitized_buckets), 200
-            except Exception as e:
-                return jsonify({"error": {"message": str(e)}}), 500
 
         @app.route('/backend-api/v2/files/<bucket_id>', methods=['GET', 'DELETE'])
         def manage_files(bucket_id: str):
@@ -331,40 +328,41 @@ class Backend_Api(Api):
                 [f.write(f"{filename}\n") for filename in filenames]
             return {"bucket_id": bucket_id, "files": filenames, "media": media}
 
-        @app.route('/backend-api/v2/files/<bucket_id>/media/<filename>', methods=['GET'])
-        def get_media(bucket_id, filename):
-            bucket_id = secure_filename(bucket_id)
-            bucket_dir = get_bucket_dir(bucket_id)
-            media_dir = os.path.join(bucket_dir, "media")
-            if os.path.exists(media_dir):
-                return send_from_directory(os.path.abspath(media_dir), filename)
-            return "File not found", 404
-
-        @app.route('/backend-api/v2/files/<bucket_id>/<filename>', methods=['PUT'])
-        def upload_file(bucket_id, filename):
-            bucket_id = secure_filename(bucket_id)
-            bucket_dir = get_bucket_dir(bucket_id)
-            filename = secure_filename(filename)
-            bucket_path = Path(bucket_dir)
-
-            if not supports_filename(filename):
-                return jsonify({"error": {"message": f"File type not allowed"}}), 400
-
-            if not bucket_path.exists():
-                bucket_path.mkdir(parents=True, exist_ok=True)
-
+        @app.route('/files/<bucket_id>/media/<filename>', methods=['GET'])
+        def get_media(bucket_id, filename, dirname: str = None):
+            media_dir = get_bucket_dir(dirname, bucket_id, "media")
             try:
-                file_path = bucket_path / filename
-                file_data = request.get_data()
-                if not file_data:
-                    return jsonify({"error": {"message": "No file data received"}}), 400
+                return send_from_directory(os.path.abspath(media_dir), filename)
+            except NotFound:
+                source_url = get_source_url(request.query_string.decode())
+                if source_url is not None:
+                    return redirect(source_url)
+                raise
 
-                with file_path.open('wb') as f:
-                    f.write(file_data)
-
-                return jsonify({"message": f"File '{filename}' uploaded successfully to bucket '{bucket_id}'"}), 201
-            except Exception as e:
-                return jsonify({"error": {"message": f"Error uploading file: {str(e)}"}}), 500
+        @app.route('/search/<search>', methods=['GET'])
+        def find_media(search: str):
+            search = [secure_filename(chunk.lower()) for chunk in search.split("+")]
+            if not os.access(images_dir, os.R_OK):
+                return jsonify({"error": {"message": "Not found"}}), 404
+            match_files = {}
+            for root, _, files in os.walk(images_dir):
+                for file in files:
+                    mime_type = is_allowed_extension(file)
+                    if mime_type is not None:
+                        mime_type = secure_filename(mime_type)
+                        for tag in search:
+                            if tag in mime_type:
+                                match_files[file] = match_files.get(file, 0) + 1
+                                break
+                    for tag in search:
+                        if tag in file.lower():
+                            match_files[file] = match_files.get(file, 0) + 1
+            match_files = [file for file, count in match_files.items() if count >= request.args.get("min", len(search))]
+            if int(request.args.get("skip", 0)) >= len(match_files):
+                return jsonify({"error": {"message": "Not found"}}), 404
+            if (request.args.get("random", False)):
+                return redirect(f"/media/{random.choice(match_files)}"), 302
+            return redirect(f"/media/{match_files[int(request.args.get('skip', 0))]}", 302)
 
         @app.route('/backend-api/v2/upload_cookies', methods=['POST'])
         def upload_cookies():
@@ -378,6 +376,36 @@ class Backend_Api(Api):
                 file.save(os.path.join(get_cookies_dir(), filename))
                 return "File saved", 200
             return 'Not supported file', 400
+
+        @self.app.route('/backend-api/v2/chat/<share_id>', methods=['GET'])
+        def get_chat(share_id: str) -> str:
+            share_id = secure_filename(share_id)
+            if self.chat_cache.get(share_id, 0) == int(request.headers.get("if-none-match", 0)):
+                return jsonify({"error": {"message": "Not modified"}}), 304
+            file = get_bucket_dir(share_id, "chat.json")
+            if not os.path.isfile(file):
+                return jsonify({"error": {"message": "Not found"}}), 404
+            with open(file, 'r') as f:
+                chat_data = json.load(f)
+                if chat_data.get("updated", 0) == int(request.headers.get("if-none-match", 0)):
+                    return jsonify({"error": {"message": "Not modified"}}), 304
+                self.chat_cache[share_id] = chat_data.get("updated", 0)
+                return jsonify(chat_data), 200
+
+        @self.app.route('/backend-api/v2/chat/<share_id>', methods=['POST'])
+        def upload_chat(share_id: str) -> dict:
+            chat_data = {**request.json}
+            updated = chat_data.get("updated", 0)
+            cache_value = self.chat_cache.get(share_id, 0)
+            if updated == cache_value:
+                return jsonify({"error": {"message": "invalid date"}}), 400
+            share_id = secure_filename(share_id)
+            bucket_dir = get_bucket_dir(share_id)
+            os.makedirs(bucket_dir, exist_ok=True)
+            with open(os.path.join(bucket_dir, "chat.json"), 'w') as f:
+                json.dump(chat_data, f)
+            self.chat_cache[share_id] = updated
+            return {"share_id": share_id}
 
     def handle_synthesize(self, provider: str):
         try:

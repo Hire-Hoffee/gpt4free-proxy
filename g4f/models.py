@@ -18,6 +18,7 @@ from .Provider import (
     FreeGpt,
     HuggingSpace,
     G4F,
+    Grok,
     DeepseekAI_JanusPro7b,
     Glider,
     Goabror,
@@ -131,8 +132,7 @@ default_vision = Model(
 # gpt-3.5
 gpt_3_5_turbo = Model(
     name          = 'gpt-3.5-turbo',
-    base_provider = 'OpenAI',
-    best_provider = TypeGPT
+    base_provider = 'OpenAI'
 )
 
 # gpt-4
@@ -165,7 +165,7 @@ gpt_4o_audio = AudioModel(
 o1 = Model(
     name          = 'o1',
     base_provider = 'OpenAI',
-    best_provider = IterListProvider([Blackbox, Copilot, TypeGPT, OpenaiAccount])
+    best_provider = IterListProvider([Blackbox, Copilot, OpenaiAccount])
 )
 
 o1_mini = Model(
@@ -178,7 +178,7 @@ o1_mini = Model(
 o3_mini = Model(
     name          = 'o3-mini',
     base_provider = 'OpenAI',
-    best_provider = IterListProvider([DDG, Blackbox, TypeGPT, PollinationsAI, Liaobots])
+    best_provider = IterListProvider([DDG, Blackbox, PollinationsAI, Liaobots])
 )
 
 ### GigaChat ###
@@ -234,11 +234,6 @@ llama_3_1_405b = Model(
 )
 
 # llama 3.2
-llama_3 = VisionModel(
-    name          = "llama-3",
-    base_provider = "Meta Llama",
-    best_provider = IterListProvider([HuggingChat, HuggingFace])
-)
 
 llama_3_2_1b = Model(
     name          = "llama-3.2-1b",
@@ -361,19 +356,19 @@ gemini_1_5_pro = Model(
 gemini_2_0_flash = Model(
     name          = 'gemini-2.0-flash',
     base_provider = 'Google DeepMind',
-    best_provider = IterListProvider([Dynaspark, GeminiPro, Liaobots])
+    best_provider = IterListProvider([Dynaspark, GeminiPro, Gemini])
 )
 
 gemini_2_0_flash_thinking = Model(
     name          = 'gemini-2.0-flash-thinking',
     base_provider = 'Google DeepMind',
-    best_provider = Liaobots
+    best_provider = Gemini
 )
 
-gemini_2_0_pro = Model(
-    name          = 'gemini-2.0-pro',
+gemini_2_0_flash_thinking_with_apps = Model(
+    name          = 'gemini-2.0-flash-thinking-with-apps',
     base_provider = 'Google DeepMind',
-    best_provider = Liaobots
+    best_provider = Gemini
 )
 
 ### Anthropic ###
@@ -383,19 +378,6 @@ claude_3_haiku = Model(
     base_provider = 'Anthropic',
     best_provider = IterListProvider([DDG, Jmuz])
 )
-
-claude_3_sonnet = Model(
-    name          = 'claude-3-sonnet',
-    base_provider = 'Anthropic',
-    best_provider = Liaobots
-)
-
-claude_3_opus = Model(
-    name          = 'claude-3-opus',
-    base_provider = 'Anthropic',
-    best_provider = IterListProvider([Jmuz, Liaobots])
-)
-
 
 # claude 3.5
 claude_3_5_sonnet = Model(
@@ -411,12 +393,6 @@ claude_3_7_sonnet = Model(
     best_provider = IterListProvider([Blackbox, Liaobots])
 )
 
-claude_3_7_sonnet_thinking = Model(
-    name          = 'claude-3.7-sonnet-thinking',
-    base_provider = 'Anthropic',
-    best_provider = Liaobots
-)
-
 ### Reka AI ###
 reka_core = Model(
     name = 'reka-core',
@@ -427,6 +403,12 @@ reka_core = Model(
 ### Blackbox AI ###
 blackboxai = Model(
     name = 'blackboxai',
+    base_provider = 'Blackbox AI',
+    best_provider = Blackbox
+)
+
+blackboxai_pro = Model(
+    name = 'blackboxai-pro',
     base_provider = 'Blackbox AI',
     best_provider = Blackbox
 )
@@ -553,13 +535,13 @@ janus_pro_7b = VisionModel(
 grok_3 = Model(
     name = 'grok-3',
     base_provider = 'x.ai',
-    best_provider = Liaobots
+    best_provider = Grok
 )
 
 grok_3_r1 = Model(
     name = 'grok-3-r1',
     base_provider = 'x.ai',
-    best_provider = Liaobots
+    best_provider = Grok
 )
 
 ### Perplexity AI ### 
@@ -846,12 +828,10 @@ class ModelUtils:
         gemini_1_5_flash.name: gemini_1_5_flash,
         gemini_2_0_flash.name: gemini_2_0_flash,
         gemini_2_0_flash_thinking.name: gemini_2_0_flash_thinking,
-        gemini_2_0_pro.name: gemini_2_0_pro,
+        gemini_2_0_flash_thinking_with_apps.name: gemini_2_0_flash_thinking_with_apps,
 
         ### Anthropic ###
         # claude 3
-        claude_3_opus.name: claude_3_opus,
-        claude_3_sonnet.name: claude_3_sonnet,
         claude_3_haiku.name: claude_3_haiku,
 
         # claude 3.5
@@ -859,13 +839,13 @@ class ModelUtils:
         
         # claude 3.7
         claude_3_7_sonnet.name: claude_3_7_sonnet,
-        claude_3_7_sonnet_thinking.name: claude_3_7_sonnet_thinking,
 
         ### Reka AI ###
         reka_core.name: reka_core,
 
         ### Blackbox AI ###
         blackboxai.name: blackboxai,
+        blackboxai_pro.name: blackboxai_pro,
 
         ### CohereForAI ###
         command_r.name: command_r,
@@ -977,7 +957,6 @@ class ModelUtils:
 
 
 demo_models = {
-    "default": [llama_3, [HuggingFace]],
     llama_3_2_11b.name: [llama_3_2_11b, [HuggingChat]],
     qwen_2_vl_7b.name: [qwen_2_vl_7b, [HuggingFaceAPI]],
     deepseek_r1.name: [deepseek_r1, [HuggingFace, PollinationsAI]],
