@@ -22,7 +22,19 @@ def to_string(value) -> str:
         return ""
     elif isinstance(value, list):
         return "".join([to_string(v) for v in value if v.get("type", "text") == "text"])
+    elif value is None:
+        return ""
     return str(value)
+
+def render_messages(messages: Messages) -> Iterator:
+    for idx, message in enumerate(messages):
+        if isinstance(message, dict) and isinstance(message.get("content"), list):
+            yield {
+                **message,
+                "content": to_string(message["content"]),
+            }
+        else:
+            yield message
 
 def format_prompt(messages: Messages, add_special_tokens: bool = False, do_continue: bool = False, include_system: bool = True) -> str:
     """
@@ -61,12 +73,20 @@ def get_last_user_message(messages: Messages) -> str:
     while last_message is not None and messages:
         last_message = messages.pop()
         if last_message["role"] == "user":
-            content = to_string(last_message["content"]).strip()
+            content = to_string(last_message.get("content")).strip()
             if content:
                 user_messages.append(content)
         else:
             return "\n".join(user_messages[::-1])
     return "\n".join(user_messages[::-1])
+
+def get_last_message(messages: Messages, prompt: str = None) -> str:
+    if prompt is None:
+        for message in messages[::-1]:
+            content = to_string(message.get("content")).strip()
+            if content:
+                prompt = content
+    return prompt
 
 def format_image_prompt(messages, prompt: str = None) -> str:
     if prompt is None:

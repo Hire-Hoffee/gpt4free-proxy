@@ -187,7 +187,7 @@ def stream_read_files(bucket_dir: Path, filenames: list, delete_files: bool = Fa
                                 else:
                                     os.unlink(filepath)
             continue
-        yield f"```{filename}\n"        
+        yield f"```{filename}\n"
         if has_pypdf2 and filename.endswith(".pdf"):
             try:
                 reader = PyPDF2.PdfReader(file_path)
@@ -518,11 +518,12 @@ async def async_read_and_download_urls(bucket_dir: Path, delete_files: bool = Fa
     if urls:
         count = 0
         with open(os.path.join(bucket_dir, FILE_LIST), 'a') as f:
-            async for filename in download_urls(bucket_dir, urls):
-                f.write(f"{filename}\n")
-                if event_stream:
-                    count += 1
-                    yield f'data: {json.dumps({"action": "download", "count": count})}\n\n'
+            for url in urls:
+                async for filename in download_urls(bucket_dir, **url):
+                    f.write(f"{filename}\n")
+                    if event_stream:
+                        count += 1
+                        yield f'data: {json.dumps({"action": "download", "count": count})}\n\n'
 
 def stream_chunks(bucket_dir: Path, delete_files: bool = False, refine_chunks_with_spacy: bool = False, event_stream: bool = False) -> Iterator[str]:
     size = 0

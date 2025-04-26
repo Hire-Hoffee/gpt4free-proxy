@@ -10,7 +10,6 @@ from .BlackForestLabs_Flux1Dev       import BlackForestLabs_Flux1Dev
 from .BlackForestLabs_Flux1Schnell   import BlackForestLabs_Flux1Schnell
 from .CohereForAI_C4AI_Command       import CohereForAI_C4AI_Command
 from .DeepseekAI_JanusPro7b          import DeepseekAI_JanusPro7b
-from .G4F                            import G4F
 from .Microsoft_Phi_4                import Microsoft_Phi_4
 from .Qwen_QVQ_72B                   import Qwen_QVQ_72B
 from .Qwen_Qwen_2_5                  import Qwen_Qwen_2_5
@@ -33,7 +32,6 @@ class HuggingSpace(AsyncGeneratorProvider, ProviderModelMixin):
         BlackForestLabs_Flux1Schnell,
         CohereForAI_C4AI_Command,
         DeepseekAI_JanusPro7b,
-        G4F,
         Microsoft_Phi_4,
         Qwen_QVQ_72B,
         Qwen_Qwen_2_5,
@@ -88,7 +86,7 @@ class HuggingSpace(AsyncGeneratorProvider, ProviderModelMixin):
         for provider in cls.providers:
             if model in provider.get_models():
                 try:
-                    async for chunk in provider.create_async_generator(model, messages, images=images, **kwargs):
+                    async for chunk in provider.create_async_generator(model, messages, media=media, **kwargs):
                         is_started = True
                         yield chunk
                     if is_started:

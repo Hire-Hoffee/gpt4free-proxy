@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Union, Optional
-try:
-    from typing import Annotated
-except ImportError:
-    class Annotated:
-        pass
-from g4f.typing import Messages
+
+from ..typing import Messages
 
 class ChatCompletionsConfig(BaseModel):
     messages: Messages = Field(examples=[[{"role": "system", "content": ""}, {"role": "user", "content": ""}]])
@@ -69,6 +65,21 @@ class ImageGenerationConfig(BaseModel):
     n: Optional[int] = None
     negative_prompt: Optional[str] = None
     resolution: Optional[str] = None
+    audio: Optional[dict] = None
+
+    @model_validator(mode='before')
+    def parse_size(cls, values):
+        if values.get('width') is not None and values.get('height') is not None:
+            return values
+
+        size = values.get('size')
+        if size:
+            try:
+                width, height = map(int, size.split('x'))
+                values['width'] = width
+                values['height'] = height
+            except (ValueError, AttributeError): pass  # If the format is incorrect, we simply ignore it.
+        return values
 
 class ProviderResponseModel(BaseModel):
     id: str

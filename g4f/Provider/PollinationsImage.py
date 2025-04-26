@@ -8,9 +8,11 @@ from .PollinationsAI import PollinationsAI
 
 class PollinationsImage(PollinationsAI):
     label = "PollinationsImage"
+    parent = PollinationsAI.__name__
     default_model = "flux"
     default_vision_model = None
     default_image_model = default_model
+    audio_models = {}
     image_models = [default_image_model]  # Default models
     _models_loaded = False  # Add a checkbox for synchronization
 
@@ -45,7 +47,7 @@ class PollinationsImage(PollinationsAI):
         private: bool = False,
         enhance: bool = False,
         safe: bool = False,
-        n: int = 4,
+        n: int = 1,
         **kwargs
     ) -> AsyncResult:
         # Calling model updates before creating a generator

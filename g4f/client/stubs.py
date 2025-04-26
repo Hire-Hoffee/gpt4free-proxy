@@ -5,12 +5,12 @@ from typing import Optional, List
 from time import time
 
 from ..image import extract_data_uri
-from ..image.copy_images import images_dir
+from ..image.copy_images import get_media_dir
 from ..client.helper import filter_markdown
 from .helper import filter_none
 
 try:
-    from pydantic import BaseModel
+    from pydantic import BaseModel, field_serializer
 except ImportError:
     class BaseModel():
         @classmethod
@@ -19,6 +19,11 @@ except ImportError:
             for key, value in data.items():
                 setattr(new, key, value)
             return new
+    class field_serializer():
+        def __init__(self, field_name):
+            self.field_name = field_name
+        def __call__(self, *args, **kwargs):
+            return args[0]
 
 class BaseModel(BaseModel):
     @classmethod
@@ -72,6 +77,7 @@ class ChatCompletionChunk(BaseModel):
     provider: Optional[str]
     choices: List[ChatCompletionDeltaChoice]
     usage: UsageModel
+    conversation: dict
 
     @classmethod
     def model_construct(
@@ -80,11 +86,12 @@ class ChatCompletionChunk(BaseModel):
         finish_reason: str,
         completion_id: str = None,
         created: int = None,
-        usage: UsageModel = None
+        usage: UsageModel = None,
+        conversation: dict = None
     ):
         return super().model_construct(
             id=f"chatcmpl-{completion_id}" if completion_id else None,
-            object="chat.completion.cunk",
+            object="chat.completion.chunk",
             created=created,
             model=None,
             provider=None,
@@ -92,8 +99,14 @@ class ChatCompletionChunk(BaseModel):
                 ChatCompletionDelta.model_construct(content),
                 finish_reason
             )],
-            **filter_none(usage=usage)
+            **filter_none(usage=usage, conversation=conversation)
         )
+
+    @field_serializer('conversation')
+    def serialize_conversation(self, conversation: dict):
+        if hasattr(conversation, "get_dict"):
+            return conversation.get_dict()
+        return conversation
 
 class ChatCompletionMessage(BaseModel):
     role: str
@@ -104,15 +117,19 @@ class ChatCompletionMessage(BaseModel):
     def model_construct(cls, content: str, tool_calls: list = None):
         return super().model_construct(role="assistant", content=content, **filter_none(tool_calls=tool_calls))
 
-    def save(self, filepath: str, allowd_types = None):
+    @field_serializer('content')
+    def serialize_content(self, content: str):
+        return str(content)
+
+    def save(self, filepath: str, allowed_types = None):
         if hasattr(self.content, "data"):
-            os.rename(self.content.data.replace("/media", images_dir), filepath)
+            os.rename(self.content.data.replace("/media", get_media_dir()), filepath)
             return
         if self.content.startswith("data:"):
             with open(filepath, "wb") as f:
                 f.write(extract_data_uri(self.content))
             return
-        content = filter_markdown(self.content, allowd_types)
+        content = filter_markdown(self.content, allowed_types)
         if content is not None:
             with open(filepath, "w") as f:
                 f.write(content)
@@ -160,13 +177,26 @@ class ChatCompletion(BaseModel):
             **filter_none(usage=usage, conversation=conversation)
         )
 
+    @field_serializer('conversation')
+    def serialize_conversation(self, conversation: dict):
+        if hasattr(conversation, "get_dict"):
+            return conversation.get_dict()
+        return conversation
+
 class ChatCompletionDelta(BaseModel):
     role: str
-    content: str
+    content: Optional[str]
 
     @classmethod
     def model_construct(cls, content: Optional[str]):
         return super().model_construct(role="assistant", content=content)
+
+    @field_serializer('content')
+    def serialize_content(self, content: Optional[str]):
+        if content is None:
+            return ""
+
+        return str(content)
 
 class ChatCompletionDeltaChoice(BaseModel):
     index: int
@@ -189,6 +219,10 @@ class Image(BaseModel):
             b64_json=b64_json,
             revised_prompt=revised_prompt
         ))
+
+    def save(self, path: str):
+        if self.url is not None and self.url.startswith("/media/"):
+            os.rename(self.url.replace("/media", get_media_dir()), path)
 
 class ImagesResponse(BaseModel):
     data: List[Image]

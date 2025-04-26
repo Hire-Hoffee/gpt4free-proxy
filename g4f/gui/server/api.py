@@ -4,13 +4,13 @@ import logging
 import os
 import asyncio
 from typing import Iterator
-from flask import send_from_directory
+from flask import send_from_directory, request
 from inspect import signature
 
 from ...errors import VersionNotFoundError, MissingAuthError
-from ...image.copy_images import copy_media, ensure_images_dir, images_dir
+from ...image.copy_images import copy_media, ensure_media_dir, get_media_dir
 from ...tools.run_tools import iter_run_tools
-from ...Provider import ProviderUtils, __providers__
+from ... import Provider
 from ...providers.base_provider import ProviderModelMixin
 from ...providers.retry_provider import BaseRetryProvider
 from ...providers.helper import format_image_prompt
@@ -30,6 +30,8 @@ class Api:
             "name": model.name,
             "image": isinstance(model, models.ImageModel),
             "vision": isinstance(model, models.VisionModel),
+            "audio": isinstance(model, models.AudioModel),
+            "video": isinstance(model, models.VideoModel),
             "providers": [
                 getattr(provider, "parent", provider.__name__)
                 for provider in providers
@@ -39,12 +41,14 @@ class Api:
         for model, providers in models.__models__.values()]
 
     @staticmethod
-    def get_provider_models(provider: str, api_key: str = None, api_base: str = None):
-        if provider in ProviderUtils.convert:
-            provider = ProviderUtils.convert[provider]
+    def get_provider_models(provider: str, api_key: str = None, api_base: str = None, ignored: list = None):
+        if provider in Provider.__map__:
+            provider = Provider.__map__[provider]
             if issubclass(provider, ProviderModelMixin):
                 if "api_key" in signature(provider.get_models).parameters:
                     models = provider.get_models(api_key=api_key, api_base=api_base)
+                elif "ignored" in signature(provider.get_models).parameters:
+                    models = provider.get_models(ignored=ignored)
                 else:
                     models = provider.get_models()
                 return [
@@ -52,8 +56,10 @@ class Api:
                         "model": model,
                         "default": model == provider.default_model,
                         "vision": getattr(provider, "default_vision_model", None) == model or model in getattr(provider, "vision_models", []),
+                        "audio": getattr(provider, "default_audio_model", None) == model or model in getattr(provider, "audio_models", []),
+                        "video": getattr(provider, "default_video_model", None) == model or model in getattr(provider, "video_models", []),
                         "image": False if provider.image_models is None else model in provider.image_models,
-                        "task": None if not hasattr(provider, "task_mapping") else provider.task_mapping[model] if model in provider.task_mapping else None
+                        "count": getattr(provider, "models_count", {}).get(model),
                     }
                     for model in models
                 ]
@@ -65,13 +71,15 @@ class Api:
             "name": provider.__name__,
             "label": provider.label if hasattr(provider, "label") else provider.__name__,
             "parent": getattr(provider, "parent", None),
-            "image": bool(getattr(provider, "image_models", False)),
+            "image": len(getattr(provider, "image_models", [])),
+            "audio": len(getattr(provider, "audio_models", [])),
+            "video": len(getattr(provider, "video_models", [])),
             "vision": getattr(provider, "default_vision_model", None) is not None,
             "nodriver": getattr(provider, "use_nodriver", False),
             "hf_space": getattr(provider, "hf_space", False),
             "auth": provider.needs_auth,
             "login_url": getattr(provider, "login_url", None),
-        } for provider in __providers__ if provider.working]
+        } for provider in Provider.__providers__ if provider.working]
 
     @staticmethod
     def get_version() -> dict:
@@ -79,7 +87,13 @@ class Api:
         latest_version = None
         try:
             current_version = version.utils.current_version
-            latest_version = version.utils.latest_version
+            try:
+                if request.args.get("cache"):
+                    latest_version = version.utils.latest_version_cached
+            except RuntimeError:
+                pass
+            if latest_version is None:
+                latest_version = version.utils.latest_version
         except VersionNotFoundError:
             pass
         return {
@@ -88,20 +102,14 @@ class Api:
         }
 
     def serve_images(self, name):
-        ensure_images_dir()
-        return send_from_directory(os.path.abspath(images_dir), name)
+        ensure_media_dir()
+        return send_from_directory(os.path.abspath(get_media_dir()), name)
 
     def _prepare_conversation_kwargs(self, json_data: dict):
         kwargs = {**json_data}
         model = json_data.get('model')
         provider = json_data.get('provider')
         messages = json_data.get('messages')
-        kwargs["tool_calls"] = [{
-            "function": {
-                "name": "bucket_tool"
-            },
-            "type": "function"
-        }]
         action = json_data.get('action')
         if action == "continue":
             kwargs["tool_calls"].append({
@@ -175,7 +183,6 @@ class Api:
                             yield self._format_json("conversation_id", conversation_id)
                 elif isinstance(chunk, Exception):
                     logger.exception(chunk)
-                    debug.error(chunk)
                     yield self._format_json('message', get_error_message(chunk), error=type(chunk).__name__)
                 elif isinstance(chunk, RequestLogin):
                     yield self._format_json("preview", chunk.to_string())
@@ -209,6 +216,8 @@ class Api:
                     yield self._format_json("content", chunk.to_string())
                 elif isinstance(chunk, AudioResponse):
                     yield self._format_json("content", str(chunk))
+                elif isinstance(chunk, SuggestedFollowups):
+                    yield self._format_json("suggestions", chunk.suggestions)
                 elif isinstance(chunk, DebugResponse):
                     yield self._format_json("log", chunk.log)
                 elif isinstance(chunk, RawResponse):
@@ -219,7 +228,6 @@ class Api:
             yield self._format_json('auth', type(e).__name__, message=get_error_message(e))
         except Exception as e:
             logger.exception(e)
-            debug.error(e)
             yield self._format_json('error', type(e).__name__, message=get_error_message(e))
         finally:
             yield from self._yield_logs()

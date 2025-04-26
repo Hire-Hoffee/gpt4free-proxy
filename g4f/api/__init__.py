@@ -33,24 +33,31 @@ from starlette.responses import FileResponse
 from types import SimpleNamespace
 from typing import Union, Optional, List
 
+try:
+    from typing import Annotated
+except ImportError:
+    class Annotated:
+        pass
+
 import g4f
-import g4f.Provider
 import g4f.debug
 from g4f.client import AsyncClient, ChatCompletion, ImagesResponse, convert_to_provider
 from g4f.providers.response import BaseConversation, JsonConversation
 from g4f.client.helper import filter_none
 from g4f.image import is_data_an_media, EXTENSIONS_MAP
-from g4f.image.copy_images import images_dir, copy_media, get_source_url
+from g4f.image.copy_images import get_media_dir, copy_media, get_source_url
 from g4f.errors import ProviderNotFoundError, ModelNotFoundError, MissingAuthError, NoValidHarFileError
 from g4f.cookies import read_cookie_files, get_cookies_dir
-from g4f.Provider import ProviderType, ProviderUtils, __providers__
+from g4f.providers.types import ProviderType
+from g4f.providers.any_provider import AnyProvider
+from g4f import Provider
 from g4f.gui import get_gui_app
 from g4f.tools.files import supports_filename, get_async_streaming
 from .stubs import (
     ChatCompletionsConfig, ImageGenerationConfig,
     ProviderResponseModel, ModelResponseModel,
     ErrorResponseModel, ProviderResponseDetailModel,
-    FileResponseModel, UploadResponseModel, Annotated
+    FileResponseModel, UploadResponseModel
 )
 from g4f import debug
 
@@ -86,8 +93,8 @@ def create_app():
 
     if AppConfig.ignored_providers:
         for provider in AppConfig.ignored_providers:
-            if provider in ProviderUtils.convert:
-                ProviderUtils.convert[provider].working = False
+            if provider in Provider.__map__:
+                Provider.__map__[provider].working = False
 
     return app
 
@@ -128,7 +135,7 @@ class AppConfig:
     ignore_cookie_files: bool = False
     model: str = None
     provider: str = None
-    image_provider: str = None
+    media_provider: str = None
     proxy: str = None
     gui: bool = False
     demo: bool = False
@@ -232,13 +239,13 @@ class Api:
             return {
                 "object": "list",
                 "data": [{
-                    "id": model_id,
+                    "id": model,
                     "object": "model",
                     "created": 0,
-                    "owned_by": model.base_provider,
+                    "owned_by": "",
                     "image": isinstance(model, g4f.models.ImageModel),
                     "provider": False,
-                } for model_id, model in g4f.models.ModelUtils.convert.items()] +
+                } for model in AnyProvider.get_models()] +
                 [{
                     "id": provider_name,
                     "object": "model",
@@ -246,7 +253,7 @@ class Api:
                     "owned_by": getattr(provider, "label", None),
                     "image": bool(getattr(provider, "image_models", False)),
                     "provider": True,
-                } for provider_name, provider in g4f.Provider.ProviderUtils.convert.items()
+                } for provider_name, provider in Provider.ProviderUtils.convert.items()
                     if provider.working and provider_name != "Custom"
                 ]
             }
@@ -255,9 +262,9 @@ class Api:
             HTTP_200_OK: {"model": List[ModelResponseModel]},
         })
         async def models(provider: str, credentials: Annotated[HTTPAuthorizationCredentials, Depends(Api.security)] = None):
-            if provider not in ProviderUtils.convert:
+            if provider not in Provider.__map__:
                 return ErrorResponse.from_message("The provider does not exist.", 404)
-            provider: ProviderType = ProviderUtils.convert[provider]
+            provider: ProviderType = Provider.__map__[provider]
             if not hasattr(provider, "get_models"):
                 models = []
             elif credentials is not None and credentials.credentials != "secret":
@@ -309,9 +316,9 @@ class Api:
                 if credentials is not None and credentials.credentials != "secret":
                     config.api_key = credentials.credentials
 
-                conversation = None
+                conversation = config.conversation
                 return_conversation = config.return_conversation
-                if conversation is not None:
+                if conversation:
                     conversation = JsonConversation(**conversation)
                     return_conversation = True
                 elif config.conversation_id is not None and config.provider is not None:
@@ -417,18 +424,13 @@ class Api:
         ):
             if config.provider is None:
                 config.provider = provider
+            if config.provider is None:
+                config.provider = AppConfig.media_provider
             if credentials is not None and credentials.credentials != "secret":
                 config.api_key = credentials.credentials
             try:
                 response = await self.client.images.generate(
-                    prompt=config.prompt,
-                    model=config.model,
-                    provider=AppConfig.image_provider if config.provider is None else config.provider,
-                    **filter_none(
-                        response_format=config.response_format,
-                        api_key=config.api_key,
-                        proxy=config.proxy
-                    )
+                    **config.dict(exclude_none=True),
                 )
                 for image in response.data:
                     if hasattr(image, "url") and image.url.startswith("/"):
@@ -454,16 +456,16 @@ class Api:
                 'created': 0,
                 'url': provider.url,
                 'label': getattr(provider, "label", None),
-            } for provider in __providers__ if provider.working]
+            } for provider in Provider.__providers__ if provider.working]
 
         @self.app.get("/v1/providers/{provider}", responses={
             HTTP_200_OK: {"model": ProviderResponseDetailModel},
             HTTP_404_NOT_FOUND: {"model": ErrorResponseModel},
         })
         async def providers_info(provider: str):
-            if provider not in ProviderUtils.convert:
+            if provider not in Provider.ProviderUtils.convert:
                 return ErrorResponse.from_message("The provider does not exist.", 404)
-            provider: ProviderType = ProviderUtils.convert[provider]
+            provider: ProviderType = Provider.ProviderUtils.convert[provider]
             def safe_get_models(provider: ProviderType) -> list[str]:
                 try:
                     return provider.get_models() if hasattr(provider, "get_models") else []
@@ -566,9 +568,9 @@ class Api:
             HTTP_404_NOT_FOUND: {}
         })
         async def get_media(filename, request: Request):
-            target = os.path.join(images_dir, os.path.basename(filename))
+            target = os.path.join(get_media_dir(), os.path.basename(filename))
             if not os.path.isfile(target):
-                other_name = os.path.join(images_dir, os.path.basename(quote_plus(filename)))
+                other_name = os.path.join(get_media_dir(), os.path.basename(quote_plus(filename)))
                 if os.path.isfile(other_name):
                     target = other_name
             ext = os.path.splitext(filename)[1][1:]
@@ -631,7 +633,7 @@ class Api:
 
 def format_exception(e: Union[Exception, str], config: Union[ChatCompletionsConfig, ImageGenerationConfig] = None, image: bool = False) -> str:
     last_provider = {} if not image else g4f.get_last_provider(True)
-    provider = (AppConfig.image_provider if image else AppConfig.provider)
+    provider = (AppConfig.media_provider if image else AppConfig.provider)
     model = AppConfig.model
     if config is not None:
         if config.provider is not None:
