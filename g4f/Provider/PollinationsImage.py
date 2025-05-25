@@ -4,6 +4,7 @@ from typing import Optional
 
 from .helper import format_image_prompt
 from ..typing import AsyncResult, Messages
+from ..constants import STATIC_URL
 from .PollinationsAI import PollinationsAI
 
 class PollinationsImage(PollinationsAI):
@@ -37,6 +38,7 @@ class PollinationsImage(PollinationsAI):
         model: str,
         messages: Messages,
         proxy: str = None,
+        referrer: str = STATIC_URL,
         prompt: str = None,
         aspect_ratio: str = "1:1",
         width: int = None,
@@ -65,6 +67,7 @@ class PollinationsImage(PollinationsAI):
             private=private,
             enhance=enhance,
             safe=safe,
-            n=n
+            n=n,
+            referrer=referrer
         ):
             yield chunk

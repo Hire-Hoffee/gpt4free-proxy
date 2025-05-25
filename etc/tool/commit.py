@@ -10,7 +10,7 @@ Usage:
   python -m etc.tool.commit [options]
 
 Options:
-  --model MODEL    Specify the AI model to use (default: claude-3.7-sonnet)
+  --model MODEL    Specify the AI model to use
   --edit           Edit the generated commit message before committing
   --no-commit      Generate message only without committing
   --list-models    List available AI models and exit
@@ -201,7 +201,7 @@ def generate_commit_message(diff_text: str, model: str = DEFAULT_MODEL) -> Optio
                         spinner = None
                     content.append(chunk.choices[0].delta.content)
                     print(chunk.choices[0].delta.content, end="", flush=True)
-            return "".join(content).strip().strip("`")
+            return "".join(content).strip("`").strip()
         except Exception as e:
             # Stop spinner if it's running
             if 'spinner' in locals() and spinner:

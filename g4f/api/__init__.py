@@ -11,9 +11,9 @@ import os.path
 import hashlib
 import asyncio
 from urllib.parse import quote_plus
-from fastapi import FastAPI, Response, Request, UploadFile, Depends
+from fastapi import FastAPI, Response, Request, UploadFile, Form, Depends
 from fastapi.middleware.wsgi import WSGIMiddleware
-from fastapi.responses import StreamingResponse, RedirectResponse, HTMLResponse, JSONResponse
+from fastapi.responses import StreamingResponse, RedirectResponse, HTMLResponse, JSONResponse, FileResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.security import APIKeyHeader
 from starlette.exceptions import HTTPException
@@ -30,6 +30,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, HTTPBasic
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import FileResponse
+from starlette.background import BackgroundTask
 from types import SimpleNamespace
 from typing import Union, Optional, List
 
@@ -41,7 +42,7 @@ except ImportError:
 
 import g4f
 import g4f.debug
-from g4f.client import AsyncClient, ChatCompletion, ImagesResponse, convert_to_provider
+from g4f.client import AsyncClient, ChatCompletion, ImagesResponse, ClientResponse, convert_to_provider
 from g4f.providers.response import BaseConversation, JsonConversation
 from g4f.client.helper import filter_none
 from g4f.image import is_data_an_media, EXTENSIONS_MAP
@@ -49,6 +50,7 @@ from g4f.image.copy_images import get_media_dir, copy_media, get_source_url
 from g4f.errors import ProviderNotFoundError, ModelNotFoundError, MissingAuthError, NoValidHarFileError
 from g4f.cookies import read_cookie_files, get_cookies_dir
 from g4f.providers.types import ProviderType
+from g4f.providers.response import AudioResponse
 from g4f.providers.any_provider import AnyProvider
 from g4f import Provider
 from g4f.gui import get_gui_app
@@ -57,7 +59,9 @@ from .stubs import (
     ChatCompletionsConfig, ImageGenerationConfig,
     ProviderResponseModel, ModelResponseModel,
     ErrorResponseModel, ProviderResponseDetailModel,
-    FileResponseModel, UploadResponseModel
+    FileResponseModel, UploadResponseModel,
+    TranscriptionResponseModel, AudioSpeechConfig,
+    ResponsesConfig
 )
 from g4f import debug
 
@@ -254,7 +258,7 @@ class Api:
                     "image": bool(getattr(provider, "image_models", False)),
                     "provider": True,
                 } for provider_name, provider in Provider.ProviderUtils.convert.items()
-                    if provider.working and provider_name != "Custom"
+                    if provider.working and provider_name not in ("Custom", "Puter")
                 ]
             }
 
@@ -298,31 +302,32 @@ class Api:
                 })
             return ErrorResponse.from_message("The model does not exist.", HTTP_404_NOT_FOUND)
 
-        @self.app.post("/v1/chat/completions", responses={
+        responses = {
             HTTP_200_OK: {"model": ChatCompletion},
             HTTP_401_UNAUTHORIZED: {"model": ErrorResponseModel},
             HTTP_404_NOT_FOUND: {"model": ErrorResponseModel},
             HTTP_422_UNPROCESSABLE_ENTITY: {"model": ErrorResponseModel},
             HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponseModel},
-        })
+        }
+        @self.app.post("/v1/chat/completions", responses=responses)
         async def chat_completions(
             config: ChatCompletionsConfig,
             credentials: Annotated[HTTPAuthorizationCredentials, Depends(Api.security)] = None,
-            provider: str = None
+            provider: str = None,
+            conversation_id: str = None,
         ):
             try:
                 if config.provider is None:
                     config.provider = AppConfig.provider if provider is None else provider
+                if config.conversation_id is None:
+                    config.conversation_id = conversation_id
                 if credentials is not None and credentials.credentials != "secret":
                     config.api_key = credentials.credentials
 
                 conversation = config.conversation
-                return_conversation = config.return_conversation
                 if conversation:
                     conversation = JsonConversation(**conversation)
-                    return_conversation = True
                 elif config.conversation_id is not None and config.provider is not None:
-                    return_conversation = True
                     if config.conversation_id in self.conversations:
                         if config.provider in self.conversations[config.conversation_id]:
                             conversation = self.conversations[config.conversation_id][config.provider]
@@ -352,7 +357,6 @@ class Api:
                             **config.dict(exclude_none=True),
                             **{
                                 "conversation_id": None,
-                                "return_conversation": return_conversation,
                                 "conversation": conversation
                             }
                         },
@@ -392,19 +396,74 @@ class Api:
                 logger.exception(e)
                 return ErrorResponse.from_exception(e, config, HTTP_500_INTERNAL_SERVER_ERROR)
 
-        @self.app.post("/api/{provider}/chat/completions", responses={
-            HTTP_200_OK: {"model": ChatCompletion},
-            HTTP_401_UNAUTHORIZED: {"model": ErrorResponseModel},
-            HTTP_404_NOT_FOUND: {"model": ErrorResponseModel},
-            HTTP_422_UNPROCESSABLE_ENTITY: {"model": ErrorResponseModel},
-            HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponseModel},
-        })
+        @self.app.post("/api/{provider}/chat/completions", responses=responses)
         async def provider_chat_completions(
             provider: str,
             config: ChatCompletionsConfig,
             credentials: Annotated[HTTPAuthorizationCredentials, Depends(Api.security)] = None,
         ):
             return await chat_completions(config, credentials, provider)
+
+        responses = {
+            HTTP_200_OK: {"model": ClientResponse},
+            HTTP_401_UNAUTHORIZED: {"model": ErrorResponseModel},
+            HTTP_404_NOT_FOUND: {"model": ErrorResponseModel},
+            HTTP_422_UNPROCESSABLE_ENTITY: {"model": ErrorResponseModel},
+            HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponseModel},
+        }
+        @self.app.post("/v1/responses", responses=responses)
+        async def v1_responses(
+            config: ResponsesConfig,
+            credentials: Annotated[HTTPAuthorizationCredentials, Depends(Api.security)] = None,
+            provider: str = None
+        ):
+            try:
+                if config.provider is None:
+                    config.provider = AppConfig.provider if provider is None else provider
+                if credentials is not None and credentials.credentials != "secret":
+                    config.api_key = credentials.credentials
+
+                conversation = None
+                if config.conversation is not None:
+                    conversation = JsonConversation(**config.conversation)
+
+                return await self.client.responses.create(
+                    **filter_none(
+                        **{
+                            "model": AppConfig.model,
+                            "proxy": AppConfig.proxy,
+                            **config.dict(exclude_none=True),
+                            "conversation": conversation
+                        },
+                        ignored=AppConfig.ignored_providers
+                    ),
+                )
+            except (ModelNotFoundError, ProviderNotFoundError) as e:
+                logger.exception(e)
+                return ErrorResponse.from_exception(e, config, HTTP_404_NOT_FOUND)
+            except (MissingAuthError, NoValidHarFileError) as e:
+                logger.exception(e)
+                return ErrorResponse.from_exception(e, config, HTTP_401_UNAUTHORIZED)
+            except Exception as e:
+                logger.exception(e)
+                return ErrorResponse.from_exception(e, config, HTTP_500_INTERNAL_SERVER_ERROR)
+
+        @self.app.post("/api/{provider}/responses", responses=responses)
+        async def provider_responses(
+            provider: str,
+            config: ChatCompletionsConfig,
+            credentials: Annotated[HTTPAuthorizationCredentials, Depends(Api.security)] = None,
+        ):
+            return await v1_responses(config, credentials, provider)
+
+        @self.app.post("/api/{provider}/{conversation_id}/chat/completions", responses=responses)
+        async def provider_chat_completions(
+            provider: str,
+            conversation_id: str,
+            config: ChatCompletionsConfig,
+            credentials: Annotated[HTTPAuthorizationCredentials, Depends(Api.security)] = None,
+        ):
+            return await chat_completions(config, credentials, provider, conversation_id)
 
         responses = {
             HTTP_200_OK: {"model": ImagesResponse},
@@ -482,6 +541,100 @@ class Api:
                 'vision_models': [model for model in [getattr(provider, "default_vision_model", None)] if model],
                 'params': [*provider.get_parameters()] if hasattr(provider, "get_parameters") else []
             }
+
+        responses = {
+            HTTP_200_OK: {"model": TranscriptionResponseModel},
+            HTTP_401_UNAUTHORIZED: {"model": ErrorResponseModel},
+            HTTP_404_NOT_FOUND: {"model": ErrorResponseModel},
+            HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponseModel},
+        }
+        @self.app.post("/v1/audio/transcriptions", responses=responses)
+        @self.app.post("/api/{path_provider}/audio/transcriptions", responses=responses)
+        async def convert(
+            file: UploadFile,
+            path_provider: str = None,
+            model: Annotated[Optional[str], Form()] = None,
+            provider: Annotated[Optional[str], Form()] = None,
+            prompt: Annotated[Optional[str], Form()] = "Transcribe this audio"
+        ):
+            provider = provider if path_provider is None else path_provider
+            kwargs = {"modalities": ["text"]}
+            if provider == "MarkItDown":
+                kwargs = {
+                    "llm_client": self.client,
+                }
+            try:
+                response = await self.client.chat.completions.create(
+                    messages=prompt,
+                    model=model,
+                    provider=provider,
+                    media=[[file.file, file.filename]],
+                    **kwargs
+                )
+                return {"text": response.choices[0].message.content, "model": response.model, "provider": response.provider}
+            except (ModelNotFoundError, ProviderNotFoundError) as e:
+                logger.exception(e)
+                return ErrorResponse.from_exception(e, None, HTTP_404_NOT_FOUND)
+            except MissingAuthError as e:
+                logger.exception(e)
+                return ErrorResponse.from_exception(e, None, HTTP_401_UNAUTHORIZED)
+            except Exception as e:
+                logger.exception(e)
+                return ErrorResponse.from_exception(e, None, HTTP_500_INTERNAL_SERVER_ERROR)
+
+        @self.app.post("/api/markitdown", responses=responses)
+        async def markitdown(
+            file: UploadFile
+        ):
+            return await convert(file, "MarkItDown")
+
+        responses = {
+            HTTP_200_OK: {"content": {"audio/*": {}}},
+            HTTP_401_UNAUTHORIZED: {"model": ErrorResponseModel},
+            HTTP_404_NOT_FOUND: {"model": ErrorResponseModel},
+            HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponseModel},
+        }
+        @self.app.post("/v1/audio/speech", responses=responses)
+        @self.app.post("/api/{path_provider}/audio/speech", responses=responses)
+        async def generate_speech(
+            config: AudioSpeechConfig,
+            provider: str = AppConfig.media_provider,
+            credentials: Annotated[HTTPAuthorizationCredentials, Depends(Api.security)] = None
+        ):
+            api_key = None
+            if credentials is not None and credentials.credentials != "secret":
+                api_key = credentials.credentials
+            try:
+                response = await self.client.chat.completions.create(
+                    messages=[
+                        {"role": "user", "content": f"{config.instrcutions} Text: {config.input}"}
+                    ],
+                    model=config.model,
+                    provider=config.provider if provider is None else provider,
+                    prompt=config.input,
+                    audio=filter_none(voice=config.voice, format=config.response_format, language=config.language),
+                    **filter_none(
+                        api_key=api_key,
+                    )
+                )
+                if isinstance(response.choices[0].message.content, AudioResponse):
+                    response = response.choices[0].message.content.data
+                    response = response.replace("/media", get_media_dir())
+                    def delete_file():
+                        try:
+                            os.remove(response)
+                        except Exception as e:
+                            logger.exception(e)
+                    return FileResponse(response, background=BackgroundTask(delete_file))
+            except (ModelNotFoundError, ProviderNotFoundError) as e:
+                logger.exception(e)
+                return ErrorResponse.from_exception(e, None, HTTP_404_NOT_FOUND)
+            except MissingAuthError as e:
+                logger.exception(e)
+                return ErrorResponse.from_exception(e, None, HTTP_401_UNAUTHORIZED)
+            except Exception as e:
+                logger.exception(e)
+                return ErrorResponse.from_exception(e, None, HTTP_500_INTERNAL_SERVER_ERROR)
 
         @self.app.post("/v1/upload_cookies", responses={
             HTTP_200_OK: {"model": List[FileResponseModel]},

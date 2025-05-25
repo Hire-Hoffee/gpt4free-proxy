@@ -7,6 +7,7 @@ from time import time
 from ..image import extract_data_uri
 from ..image.copy_images import get_media_dir
 from ..client.helper import filter_markdown
+from ..providers.response import Reasoning, ToolCalls
 from .helper import filter_none
 
 try:
@@ -108,18 +109,44 @@ class ChatCompletionChunk(BaseModel):
             return conversation.get_dict()
         return conversation
 
+class ResponseMessage(BaseModel):
+    type: str = "message"
+    role: str
+    content: list[ResponseMessageContent]
+
+    @classmethod
+    def model_construct(cls, content: str):
+        return super().model_construct(role="assistant", content=[ResponseMessageContent.model_construct(content)])
+
+class ResponseMessageContent(BaseModel):
+    type: str
+    text: str
+
+    @classmethod
+    def model_construct(cls, text: str):
+        return super().model_construct(type="output_text", text=text)
+
+    @field_serializer('text')
+    def serialize_text(self, text: str):
+        return str(text)
+
 class ChatCompletionMessage(BaseModel):
     role: str
     content: str
+    reasoning_content: Optional[str] = None
     tool_calls: list[ToolCallModel] = None
-
+    
     @classmethod
-    def model_construct(cls, content: str, tool_calls: list = None):
-        return super().model_construct(role="assistant", content=content, **filter_none(tool_calls=tool_calls))
+    def model_construct(cls, content: str, reasoning_content: list[Reasoning] = None, tool_calls: list = None):
+        return super().model_construct(role="assistant", content=content, **filter_none(tool_calls=tool_calls, reasoning_content=reasoning_content))
 
     @field_serializer('content')
     def serialize_content(self, content: str):
         return str(content)
+
+    @field_serializer('reasoning_content')
+    def serialize_reasoning_content(self, reasoning_content: list):
+        return "".join([str(content) for content in reasoning_content]) if reasoning_content else None
 
     def save(self, filepath: str, allowed_types = None):
         if hasattr(self.content, "data"):
@@ -133,6 +160,7 @@ class ChatCompletionMessage(BaseModel):
         if content is not None:
             with open(filepath, "w") as f:
                 f.write(content)
+
 
 class ChatCompletionChoice(BaseModel):
     index: int
@@ -162,7 +190,8 @@ class ChatCompletion(BaseModel):
         created: int = None,
         tool_calls: list[ToolCallModel] = None,
         usage: UsageModel = None,
-        conversation: dict = None
+        conversation: dict = None,
+        reasoning_content: list[Reasoning] = None
     ):
         return super().model_construct(
             id=f"chatcmpl-{completion_id}" if completion_id else None,
@@ -171,9 +200,46 @@ class ChatCompletion(BaseModel):
             model=None,
             provider=None,
             choices=[ChatCompletionChoice.model_construct(
-                ChatCompletionMessage.model_construct(content, tool_calls),
+                ChatCompletionMessage.model_construct(content, reasoning_content, tool_calls),
                 finish_reason,
             )],
+            **filter_none(usage=usage, conversation=conversation)
+        )
+
+    @field_serializer('conversation')
+    def serialize_conversation(self, conversation: dict):
+        if hasattr(conversation, "get_dict"):
+            return conversation.get_dict()
+        return conversation
+
+class ClientResponse(BaseModel):
+    id: str
+    object: str
+    created_at: int
+    model: str
+    provider: Optional[str]
+    output: list[ResponseMessage]
+    usage: UsageModel
+    conversation: dict
+
+    @classmethod
+    def model_construct(
+        cls,
+        content: str,
+        response_id: str = None,
+        created_at: int = None,
+        usage: UsageModel = None,
+        conversation: dict = None
+    ) -> ClientResponse:
+        return super().model_construct(
+            id=f"resp-{response_id}" if response_id else None,
+            object="response",
+            created_at=created_at,
+            model=None,
+            provider=None,
+            output=[
+                ResponseMessage.model_construct(content),
+            ],
             **filter_none(usage=usage, conversation=conversation)
         )
 
@@ -186,16 +252,25 @@ class ChatCompletion(BaseModel):
 class ChatCompletionDelta(BaseModel):
     role: str
     content: Optional[str]
+    reasoning_content: Optional[str] = None
+    tool_calls: list[ToolCallModel] = None
 
     @classmethod
     def model_construct(cls, content: Optional[str]):
+        if isinstance(content, Reasoning):
+            return super().model_construct(role="reasoning", content=content, reasoning_content=str(content))
+        elif isinstance(content, ToolCalls):
+            return super().model_construct(role="assistant", content=None, tool_calls=[
+                ToolCallModel.model_construct(**tool_call) for tool_call in content.get_list()
+            ])
         return super().model_construct(role="assistant", content=content)
 
     @field_serializer('content')
     def serialize_content(self, content: Optional[str]):
         if content is None:
             return ""
-
+        if isinstance(content, (Reasoning, ToolCalls)):
+            return None
         return str(content)
 
 class ChatCompletionDeltaChoice(BaseModel):

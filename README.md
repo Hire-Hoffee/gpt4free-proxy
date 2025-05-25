@@ -45,7 +45,7 @@ docker pull hlohaus789/g4f
   Reach out for help in our [Support Group: discord.gg/qXA4Wf4Fsm](https://discord.gg/qXA4Wf4Fsm).
 
 - **Read our Documentation** 📖  
-  Find detailed guidance and resources at [gpt4free.github.io/docs](https://gpt4free.github.io/docs/main.html).
+  Find detailed guidance and resources at [gpt4free.github.io/docs](https://github.com/gpt4free/gpt4free.github.io).
 
 ## 🔻 Site Takedown
 
@@ -69,9 +69,9 @@ Is your site on this repository and you want to take it down? Send an email to t
      - [📝 Text Generation](#-text-generation)
      - [🎨 Image Generation](#-image-generation)
      - [🌐 Web Interface](#-web-interface)
-     - [🖥️ Local Inference](https://gpt4free.github.io/docs/local.html)
+     - [🖥️ Local Inference](https://github.com/gpt4free/gpt4free.github.io/blob/main/docs/local.md)
      - [🤖 Interference API](#-interference-api)
-     - [🛠️ Configuration](https://gpt4free.github.io/docs/configuration.html)
+     - [🛠️ Configuration](https://github.com/gpt4free/gpt4free.github.io/blob/main/docs/configuration.md)
      - [📱 Run on Smartphone](#-run-on-smartphone)
      - [📘 Full Documentation for Python API](#-full-documentation-for-python-api)
   - [🚀 Providers and Models](https://github.com/gpt4free/gpt4free.github.io/blob/main/docs%2Fproviders-and-models.md)
@@ -94,8 +94,8 @@ Is your site on this repository and you want to take it down? Send an email to t
 1. **Install Docker:** [Download and install Docker](https://docs.docker.com/get-docker/).
 2. **Set Up Directories:** Before running the container, make sure the necessary data directories exist or can be created. For example, you can create and set ownership on these directories by running: 
 ```bash
-mkdir -p ${PWD}/har_and_cookies ${PWD}/generated_images
-sudo chown -R 1200:1201 ${PWD}/har_and_cookies ${PWD}/generated_images
+mkdir -p ${PWD}/har_and_cookies ${PWD}/generated_media
+sudo chown -R 1200:1201 ${PWD}/har_and_cookies ${PWD}/generated_media
 ```
 3. **Run the Docker Container:** Use the following commands to pull the latest image and start the container (Only x64):
 ```bash
@@ -103,18 +103,18 @@ docker pull hlohaus789/g4f
 docker run -p 8080:8080 -p 7900:7900 \
   --shm-size="2g" \
   -v ${PWD}/har_and_cookies:/app/har_and_cookies \
-  -v ${PWD}/generated_images:/app/generated_images \
+  -v ${PWD}/generated_media:/app/generated_media \
   hlohaus789/g4f:latest
 ```
 
 4. **Running the Slim Docker Image:** And use the following commands to run the Slim Docker image. This command also updates the `g4f` package at startup and installs any additional dependencies: (x64 and arm64)
 ```bash
-mkdir -p ${PWD}/har_and_cookies ${PWD}/generated_images
-chown -R 1000:1000 ${PWD}/har_and_cookies ${PWD}/generated_images
+mkdir -p ${PWD}/har_and_cookies ${PWD}/generated_media
+chown -R 1000:1000 ${PWD}/har_and_cookies ${PWD}/generated_media
 docker run \
   -p 1337:1337 \
   -v ${PWD}/har_and_cookies:/app/har_and_cookies \
-  -v ${PWD}/generated_images:/app/generated_images \
+  -v ${PWD}/generated_media:/app/generated_media \
   hlohaus789/g4f:latest-slim \
   /bin/sh -c 'rm -rf /app/g4f && pip install -U g4f[slim] && python -m g4f --debug'
 ```
@@ -152,7 +152,7 @@ By following these steps, you should be able to successfully install and run the
 pip install -U g4f[all]
 ```
 
-> How do I install only parts or do disable parts? **Use partial requirements:** [/docs/requirements](https://gpt4free.github.io/docs/requirements.html)
+> How do I install only parts or do disable parts? **Use partial requirements:** [/docs/requirements](https://github.com/gpt4free/gpt4free.github.io/blob/main/docs/requirements.md)
 
 #### Install from Source:
 ```bash
@@ -161,7 +161,7 @@ cd gpt4free
 pip install -r requirements.txt
 ```
 
-> How do I load the project using git and installing the project requirements? **Read this tutorial and follow it step by step:** [/docs/git](https://gpt4free.github.io/docs/git.html)
+> How do I load the project using git and installing the project requirements? **Read this tutorial and follow it step by step:** [/docs/git](https://github.com/gpt4free/gpt4free.github.io/blob/main/docs/git.md)
 
 ---
 
@@ -196,7 +196,7 @@ response = client.images.generate(
 
 print(f"Generated image URL: {response.data[0].url}")
 ```
-[![Image with cat](https://gpt4free.github.io/docs/images/cat.jpeg)](https://gpt4free.github.io/docs/client.html)
+[![Image with cat](https://gpt4free.github.io/docs/images/cat.jpeg)](https://github.com/gpt4free/gpt4free.github.io/blob/main/docs/client.md)
 
 ### 🌐 Web Interface
 **Run the GUI using Python:**
@@ -214,7 +214,7 @@ python -m g4f.cli gui --port 8080 --debug
 python -m g4f --port 8080 --debug
 ```
 
-> **Learn More About the GUI:** For detailed instructions on how to set up, configure, and use the GPT4Free GUI, refer to the [GUI Documentation](https://gpt4free.github.io/docs/gui.html) . This guide includes step-by-step details on provider selection, managing conversations, using advanced features like speech recognition, and more.
+> **Learn More About the GUI:** For detailed instructions on how to set up, configure, and use the GPT4Free GUI, refer to the [GUI Documentation](https://github.com/gpt4free/gpt4free.github.io/blob/main/docs/gui.md) . This guide includes step-by-step details on provider selection, managing conversations, using advanced features like speech recognition, and more.
 
 ---
 
@@ -222,499 +222,63 @@ python -m g4f --port 8080 --debug
 
 The **Interference API** enables seamless integration with OpenAI's services through G4F, allowing you to deploy efficient AI solutions.
 
-- **Documentation**: [Interference API Docs](https://gpt4free.github.io/docs/interference-api.html)
+- **Documentation**: [Interference API Docs](https://github.com/gpt4free/gpt4free.github.io/blob/main/docs/interference-api.md)
 - **Endpoint**: `http://localhost:1337/v1`
 - **Swagger UI**: Explore the OpenAPI documentation via Swagger UI at `http://localhost:1337/docs`
-- **Provider Selection**: [How to Specify a Provider?](https://gpt4free.github.io/docs/selecting_a_provider.html)
+- **Provider Selection**: [How to Specify a Provider?](https://github.com/gpt4free/gpt4free.github.io/blob/main/docs/selecting_a_provider.md)
 
 This API is designed for straightforward implementation and enhanced compatibility with other OpenAI integrations.
 
 ---
 
 ### 📱 Run on Smartphone
-Run the Web UI on your smartphone for easy access on the go. Check out the dedicated guide to learn how to set up and use the GUI on your mobile device: [Run on Smartphone Guide](https://gpt4free.github.io/docs/guides/phone.html)
+Run the Web UI on your smartphone for easy access on the go. Check out the dedicated guide to learn how to set up and use the GUI on your mobile device: [Run on Smartphone Guide](https://github.com/gpt4free/gpt4free.github.io/blob/main/docs/guides/phone.md)
 
 ---
 
 #### **📘 Full Documentation for Python API**
-   - **Client API from G4F:** [/docs/client](https://gpt4free.github.io/docs/client.html)
-   - **AsyncClient API from G4F:** [/docs/async_client](https://gpt4free.github.io/docs/async_client.html)
-   - **Requests API from G4F:** [/docs/requests](https://gpt4free.github.io/docs/requests.html)
-   - **File API from G4F:** [/docs/file](https://gpt4free.github.io/docs/file.html)
-   - **PydanticAI and LangChain Integration for G4F:** [/docs/pydantic_ai](https://gpt4free.github.io/docs/pydantic_ai.html)
-   - **Legacy API with python modules:** [/docs/legacy](https://gpt4free.github.io/docs/legacy.html)
-   - **G4F - Media Documentation** [/docs/media](https://gpt4free.github.io/media.html) *(New)*
+   - **Client API from G4F:** [/docs/client](https://github.com/gpt4free/gpt4free.github.io/blob/main/docs/client.md)
+   - **AsyncClient API from G4F:** [/docs/async_client](https://github.com/gpt4free/gpt4free.github.io/blob/main/docs/async_client.md)
+   - **Requests API from G4F:** [/docs/requests](https://github.com/gpt4free/gpt4free.github.io/blob/main/docs/requests.md)
+   - **File API from G4F:** [/docs/file](https://github.com/gpt4free/gpt4free.github.io/blob/main/docs/file.md)
+   - **PydanticAI and LangChain Integration for G4F:** [/docs/pydantic_ai](https://github.com/gpt4free/gpt4free.github.io/blob/main/docs/pydantic_ai.md)
+   - **Legacy API with python modules:** [/docs/legacy](https://github.com/gpt4free/gpt4free.github.io/blob/main/docs/legacy.md)
+   - **G4F - Media Documentation (Image, Audio and Video)** [/docs/media](https://github.com/gpt4free/gpt4free.github.io/blob/main/docs/media.md) *(New)*
 
 ---
 
-## 🔗 Powered by gpt4free
+### Powered by Pollinations AI
 
-<table>
-  <thead align="center">
-    <tr border: none;>
-      <td>
-        <b>🎁 Projects</b>
-      </td>
-      <td>
-        <b>⭐ Stars</b>
-      </td>
-      <td>
-        <b>📚 Forks</b>
-      </td>
-      <td>
-        <b>🛎 Issues</b>
-      </td>
-      <td>
-        <b>📬 Pull requests</b>
-      </td>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>
-        <a href="https://github.com/xtekky/gpt4free">
-          <b>gpt4free</b>
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/xtekky/gpt4free/stargazers">
-          <img alt="Stars" src="https://img.shields.io/github/stars/xtekky/gpt4free?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/xtekky/gpt4free/network/members">
-          <img alt="Forks" src="https://img.shields.io/github/forks/xtekky/gpt4free?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/xtekky/gpt4free/issues">
-          <img alt="Issues" src="https://img.shields.io/github/issues/xtekky/gpt4free?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/xtekky/gpt4free/pulls">
-          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/xtekky/gpt4free?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-    </tr>
-    <td>
-      <a href="https://github.com/xiangsx/gpt4free-ts">
-        <b>gpt4free-ts</b>
-      </a>
-    </td>
-    <td>
-      <a href="https://github.com/xiangsx/gpt4free-ts/stargazers">
-        <img alt="Stars" src="https://img.shields.io/github/stars/xiangsx/gpt4free-ts?style=flat-square&labelColor=343b41" />
-      </a>
-    </td>
-    <td>
-      <a href="https://github.com/xiangsx/gpt4free-ts/network/members">
-        <img alt="Forks" src="https://img.shields.io/github/forks/xiangsx/gpt4free-ts?style=flat-square&labelColor=343b41" />
-      </a>
-    </td>
-    <td>
-      <a href="https://github.com/xiangsx/gpt4free-ts/issues">
-        <img alt="Issues" src="https://img.shields.io/github/issues/xiangsx/gpt4free-ts?style=flat-square&labelColor=343b41" />
-      </a>
-    </td>
-    <td>
-      <a href="https://github.com/xiangsx/gpt4free-ts/pulls">
-        <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/xiangsx/gpt4free-ts?style=flat-square&labelColor=343b41" />
-      </a>
-    </td>
-    </tr>
-    <tr>
-      <td>
-        <a href="https://github.com/zukixa/cool-ai-stuff/">
-          <b>Free AI API's & Potential Providers List</b>
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/zukixa/cool-ai-stuff/stargazers">
-          <img alt="Stars" src="https://img.shields.io/github/stars/zukixa/cool-ai-stuff?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/zukixa/cool-ai-stuff/network/members">
-          <img alt="Forks" src="https://img.shields.io/github/forks/zukixa/cool-ai-stuff?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/zukixa/cool-ai-stuff/issues">
-          <img alt="Issues" src="https://img.shields.io/github/issues/zukixa/cool-ai-stuff?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/zukixa/cool-ai-stuff/pulls">
-          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/zukixa/cool-ai-stuff?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-    </tr>
-    <tr>
-    <tr>
-      <td>
-        <a href="https://github.com/xtekky/chatgpt-clone">
-          <b>ChatGPT-Clone</b>
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/xtekky/chatgpt-clone/stargazers">
-          <img alt="Stars" src="https://img.shields.io/github/stars/xtekky/chatgpt-clone?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/xtekky/chatgpt-clone/network/members">
-          <img alt="Forks" src="https://img.shields.io/github/forks/xtekky/chatgpt-clone?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/xtekky/chatgpt-clone/issues">
-          <img alt="Issues" src="https://img.shields.io/github/issues/xtekky/chatgpt-clone?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/xtekky/chatgpt-clone/pulls">
-          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/xtekky/chatgpt-clone?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <a href="https://github.com/mishalhossin/Discord-Chatbot-Gpt4Free">
-          <b>Ai agent</b>
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Josh-XT/AGiXT/stargazers">
-          <img alt="Stars" src="https://img.shields.io/github/stars/mishalhossin/Discord-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Josh-XT/AGiXT/network/members">
-          <img alt="Forks" src="https://img.shields.io/github/forks/mishalhossin/Discord-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Josh-XT/AGiXT/issues">
-          <img alt="Issues" src="https://img.shields.io/github/issues/mishalhossin/Discord-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Josh-XT/AGiXT/pulls">
-          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/mishalhossin/Discord-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <a href="https://github.com/mishalhossin/Discord-Chatbot-Gpt4Free">
-          <b>ChatGpt Discord Bot</b>
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/mishalhossin/Discord-Chatbot-Gpt4Free/stargazers">
-          <img alt="Stars" src="https://img.shields.io/github/stars/mishalhossin/Discord-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/mishalhossin/Discord-Chatbot-Gpt4Free/network/members">
-          <img alt="Forks" src="https://img.shields.io/github/forks/mishalhossin/Discord-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/mishalhossin/Discord-Chatbot-Gpt4Free/issues">
-          <img alt="Issues" src="https://img.shields.io/github/issues/mishalhossin/Discord-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/mishalhossin/Coding-Chatbot-Gpt4Free/pulls">
-          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/mishalhossin/Discord-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-    <tr>
-    <tr>
-      <td>
-        <a href="https://github.com/Zero6992/chatGPT-discord-bot">
-          <b>chatGPT-discord-bot</b>
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Zero6992/chatGPT-discord-bot/stargazers">
-          <img alt="Stars" src="https://img.shields.io/github/stars/Zero6992/chatGPT-discord-bot?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Zero6992/chatGPT-discord-bot/network/members">
-          <img alt="Forks" src="https://img.shields.io/github/forks/Zero6992/chatGPT-discord-bot?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Zero6992/chatGPT-discord-bot/issues">
-          <img alt="Issues" src="https://img.shields.io/github/issues/Zero6992/chatGPT-discord-bot?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Zero6992/chatGPT-discord-bot/pulls">
-          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/Zero6992/chatGPT-discord-bot?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-    <tr>
-      <td>
-        <a href="https://github.com/SamirXR/Nyx-Bot">
-          <b>Nyx-Bot (Discord)</b>
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/SamirXR/Nyx-Bot/stargazers">
-          <img alt="Stars" src="https://img.shields.io/github/stars/SamirXR/Nyx-Bot?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/SamirXR/Nyx-Bot/network/members">
-          <img alt="Forks" src="https://img.shields.io/github/forks/SamirXR/Nyx-Bot?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/SamirXR/Nyx-Bot/issues">
-          <img alt="Issues" src="https://img.shields.io/github/issues/SamirXR/Nyx-Bot?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/SamirXR/Nyx-Bot/pulls">
-          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/SamirXR/Nyx-Bot?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-    </tr>
-    </tr>
-    <tr>
-      <td>
-        <a href="https://github.com/MIDORIBIN/langchain-gpt4free">
-          <b>LangChain gpt4free</b>
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/MIDORIBIN/langchain-gpt4free/stargazers">
-          <img alt="Stars" src="https://img.shields.io/github/stars/MIDORIBIN/langchain-gpt4free?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/MIDORIBIN/langchain-gpt4free/network/members">
-          <img alt="Forks" src="https://img.shields.io/github/forks/MIDORIBIN/langchain-gpt4free?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/MIDORIBIN/langchain-gpt4free/issues">
-          <img alt="Issues" src="https://img.shields.io/github/issues/MIDORIBIN/langchain-gpt4free?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/MIDORIBIN/langchain-gpt4free/pulls">
-          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/MIDORIBIN/langchain-gpt4free?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <a href="https://github.com/HexyeDEV/Telegram-Chatbot-Gpt4Free">
-          <b>ChatGpt Telegram Bot</b>
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/HexyeDEV/Telegram-Chatbot-Gpt4Free/stargazers">
-          <img alt="Stars" src="https://img.shields.io/github/stars/HexyeDEV/Telegram-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/HexyeDEV/Telegram-Chatbot-Gpt4Free/network/members">
-          <img alt="Forks" src="https://img.shields.io/github/forks/HexyeDEV/Telegram-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/HexyeDEV/Telegram-Chatbot-Gpt4Free/issues">
-          <img alt="Issues" src="https://img.shields.io/github/issues/HexyeDEV/Telegram-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/HexyeDEV/Telegram-Chatbot-Gpt4Free/pulls">
-          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/HexyeDEV/Telegram-Chatbot-Gpt4Free?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <a href="https://github.com/Lin-jun-xiang/chatgpt-line-bot">
-          <b>ChatGpt Line Bot</b>
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Lin-jun-xiang/chatgpt-line-bot/stargazers">
-          <img alt="Stars" src="https://img.shields.io/github/stars/Lin-jun-xiang/chatgpt-line-bot?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Lin-jun-xiang/chatgpt-line-bot/network/members">
-          <img alt="Forks" src="https://img.shields.io/github/forks/Lin-jun-xiang/chatgpt-line-bot?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Lin-jun-xiang/chatgpt-line-bot/issues">
-          <img alt="Issues" src="https://img.shields.io/github/issues/Lin-jun-xiang/chatgpt-line-bot?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Lin-jun-xiang/chatgpt-line-bot/pulls">
-          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/Lin-jun-xiang/chatgpt-line-bot?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <a href="https://github.com/Lin-jun-xiang/action-translate-readme">
-          <b>Action Translate Readme</b>
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Lin-jun-xiang/action-translate-readme/stargazers">
-          <img alt="Stars" src="https://img.shields.io/github/stars/Lin-jun-xiang/action-translate-readme?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Lin-jun-xiang/action-translate-readme/network/members">
-          <img alt="Forks" src="https://img.shields.io/github/forks/Lin-jun-xiang/action-translate-readme?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Lin-jun-xiang/action-translate-readme/issues">
-          <img alt="Issues" src="https://img.shields.io/github/issues/Lin-jun-xiang/action-translate-readme?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Lin-jun-xiang/action-translate-readme/pulls">
-          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/Lin-jun-xiang/action-translate-readme?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <a href="https://github.com/Lin-jun-xiang/docGPT-streamlit">
-          <b>Langchain Document GPT</b>
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Lin-jun-xiang/docGPT-streamlit/stargazers">
-          <img alt="Stars" src="https://img.shields.io/github/stars/Lin-jun-xiang/docGPT-streamlit?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Lin-jun-xiang/docGPT-streamlit/network/members">
-          <img alt="Forks" src="https://img.shields.io/github/forks/Lin-jun-xiang/docGPT-streamlit?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Lin-jun-xiang/docGPT-streamlit/issues">
-          <img alt="Issues" src="https://img.shields.io/github/issues/Lin-jun-xiang/docGPT-streamlit?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Lin-jun-xiang/docGPT-streamlit/pulls">
-          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/Lin-jun-xiang/docGPT-streamlit?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <a href="https://github.com/Simatwa/python-tgpt">
-          <b>python-tgpt</b>
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Simatwa/python-tgpt/stargazers">
-          <img alt="Stars" src="https://img.shields.io/github/stars/Simatwa/python-tgpt?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Simatwa/python-tgpt/network/members">
-          <img alt="Forks" src="https://img.shields.io/github/forks/Simatwa/python-tgpt?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Simatwa/python-tgpt/issues">
-          <img alt="Issues" src="https://img.shields.io/github/issues/Simatwa/python-tgpt?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/Simatwa/python-tgpt/pulls">
-          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/Simatwa/python-tgpt?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <a href="https://github.com/zachey01/gpt4free.js">
-          <b>GPT4js</b>
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/zachey01/gpt4free.js/stargazers">
-          <img alt="Stars" src="https://img.shields.io/github/stars/zachey01/gpt4free.js?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/zachey01/gpt4free.js/network/members">
-          <img alt="Forks" src="https://img.shields.io/github/forks/zachey01/gpt4free.js?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/zachey01/gpt4free.js/issues">
-          <img alt="Issues" src="https://img.shields.io/github/issues/zachey01/gpt4free.js?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/zachey01/gpt4free.js/pulls">
-          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/zachey01/gpt4free.js?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <a href="https://github.com/yjg30737/pyqt-openai">
-          <b>VividNode (pyqt-openai)</b>
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/yjg30737/pyqt-openai/stargazers">
-          <img alt="Stars" src="https://img.shields.io/github/stars/yjg30737/pyqt-openai?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/yjg30737/pyqt-openai/network/members">
-          <img alt="Forks" src="https://img.shields.io/github/forks/yjg30737/pyqt-openai?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/yjg30737/pyqt-openai/issues">
-          <img alt="Issues" src="https://img.shields.io/github/issues/yjg30737/pyqt-openai?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-      <td>
-        <a href="https://github.com/yjg30737/pyqt-openai/pulls">
-          <img alt="Pull Requests" src="https://img.shields.io/github/issues-pr/yjg30737/pyqt-openai?style=flat-square&labelColor=343b41" />
-        </a>
-      </td>
-    </tr>
-  </tbody>
-</table>
+**🌟 Pollinations AI**
 
+<img src="https://image.pollinations.ai/prompt/Create+a+logo+for+Pollinations+AI+featuring+an+abstract+flower+blooming+digital+petals+glowing+center+futuristic+font+Pollinations+AI?width=512&height=256&nologo=true" height="128">
 
+A creative AI content platform that generates images, audios, and other media using advanced generative models. Pollinations AI empowers users and developers to turn text into visuals and multimedia experiences.
+
+> [pollinations/pollinations on GitHub](https://github.com/pollinations/pollinations)
+
+---
+
+### Powered by GPT4Free
+
+**💸 MoneyPrinter**
+
+<img src="https://image.pollinations.ai/prompt/Create+a+logo+for+MoneyPrinter+glowing+center+futuristic+font?width=512&height=256&nologo=true" height="128">
+
+MoneyPrinter V2 cranks up the automation for making money online. It’s a complete overhaul of the original MoneyPrinter, rebuilt from the ground up for more features and a plug-and-play, modular design. MPV2 takes the grind and guesswork out of online income: just set it up, let it run, and watch your earnings stack.
+
+> [FujiwaraChoki/MoneyPrinterV2 on GitHub](https://github.com/FujiwaraChoki/MoneyPrinterV2)
+
+> [Full list of GPT4Free powered sites and tools](https://github.com/gpt4free/gpt4free.github.io/blob/main/docs/powered-by.md)
 
 ## 🤝 Contribute
 We welcome contributions from the community. Whether you're adding new providers or features, or simply fixing typos and making small improvements, your input is valued. Creating a pull request is all it takes – our co-pilot will handle the code review process. Once all changes have been addressed, we'll merge the pull request into the main branch and release the updates at a later time.
 
 ###### Guide: How do i create a new Provider?
-   - **Read:** [Create Provider Guide](https://gpt4free.github.io/docs/guides/create_provider.html)
+   - **Read:** [Create Provider Guide](https://github.com/gpt4free/gpt4free.github.io/blob/main/docs/guides/create_provider.md)
 
 ###### Guide: How can AI help me with writing code?
-   - **Read:** [AI Assistance Guide](https://gpt4free.github.io/docs/guides/help_me.html)
+   - **Read:** [AI Assistance Guide](https://github.com/gpt4free/gpt4free.github.io/blob/main/docs/guides/help_me.md)
 
 
 
@@ -884,4 +448,3 @@ This project is licensed under <a href="https://github.com/xtekky/gpt4free/blob/
 ---
 
 <p align="right">(<a href="#top">🔼 Back to top</a>)</p>
-

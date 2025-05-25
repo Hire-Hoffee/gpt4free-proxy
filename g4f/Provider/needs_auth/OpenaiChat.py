@@ -23,11 +23,11 @@ from ...requests.raise_for_status import raise_for_status
 from ...requests import StreamSession
 from ...requests import get_nodriver
 from ...image import ImageRequest, to_image, to_bytes, is_accepted_format
-from ...errors import MissingAuthError, NoValidHarFileError
+from ...errors import MissingAuthError, NoValidHarFileError, ModelNotSupportedError
 from ...providers.response import JsonConversation, FinishReason, SynthesizeData, AuthResult, ImageResponse, ImagePreview
 from ...providers.response import Sources, TitleGeneration, RequestLogin, Reasoning
 from ...tools.media import merge_media
-from ..helper import format_cookies, format_image_prompt
+from ..helper import format_cookies, format_image_prompt, to_string
 from ..openai.models import default_model, default_image_model, models, image_models, text_models
 from ..openai.har_file import get_request_config
 from ..openai.har_file import RequestConfig, arkReq, arkose_url, start_url, conversation_url, backend_url, backend_anon_url
@@ -153,8 +153,7 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
                 "use_case":	"multimodal"
             }
             # Post the image data to the service and get the image data
-            headers = auth_result.headers if hasattr(auth_result, "headers") else None
-            async with session.post(f"{cls.url}/backend-api/files", json=data, headers=headers) as response:
+            async with session.post(f"{cls.url}/backend-api/files", json=data, headers=cls._headers) as response:
                 cls._update_request_args(auth_result, session)
                 await raise_for_status(response, "Create file failed")
                 image_data = {
@@ -221,7 +220,7 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
         messages = [{
             "id": str(uuid.uuid4()),
             "author": {"role": message["role"]},
-            "content": {"content_type": "text", "parts": [message["content"]]},
+            "content": {"content_type": "text", "parts": [to_string(message["content"])]},
             "metadata": {"serialization_metadata": {"custom_symbol_offsets": []}, **({"system_hints": system_hints} if system_hints else {})},
             "create_time": time.time(),
         } for message in messages]
@@ -266,7 +265,7 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
             element = element["asset_pointer"] 
         if isinstance(element, str) and element.startswith("file-service://"):
             element = element.split("file-service://", 1)[-1]
-        if isinstance(element, str) and element.startswith("sediment://"):
+        elif isinstance(element, str) and element.startswith("sediment://"):
             is_sediment = True
             element = element.split("sediment://")[-1]
         else:
@@ -304,7 +303,7 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
         action: str = "next",
         conversation: Conversation = None,
         media: MediaListType = None,
-        return_conversation: bool = False,
+        return_conversation: bool = True,
         web_search: bool = False,
         prompt: str = None,
         **kwargs
@@ -337,7 +336,8 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
             timeout=timeout
         ) as session:
             image_requests = None
-            if not cls.needs_auth:
+            media  = merge_media(media, messages)
+            if not cls.needs_auth and not media:
                 if cls._headers is None:
                     cls._create_request_args(cls._cookies)
                     async with session.get(cls.url, headers=INIT_HEADERS) as response:
@@ -352,11 +352,14 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
                     cls._update_request_args(auth_result, session)
                     await raise_for_status(response)
                 try:
-                    image_requests = await cls.upload_images(session, auth_result, merge_media(media, messages))
+                    image_requests = await cls.upload_images(session, auth_result, media)
                 except Exception as e:
                     debug.error("OpenaiChat: Upload image failed")
                     debug.error(e)
-            model = cls.get_model(model)
+            try:
+                model = cls.get_model(model)
+            except ModelNotSupportedError:
+                pass
             if conversation is None:
                 conversation = Conversation(None, str(uuid.uuid4()), getattr(auth_result, "cookies", {}).get("oai-did"))
             else:
@@ -455,7 +458,16 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
                         raise RuntimeError((await response.json()), data)
                     await raise_for_status(response)
                     buffer = u""
+                    matches = []
                     async for line in response.iter_lines():
+                        pattern = re.compile(r"file-service://[\w-]+")
+                        for match in pattern.finditer(line.decode(errors="ignore")):
+                            if match.group(0) in matches:
+                                continue
+                            matches.append(match.group(0))
+                            generated_image = await cls.get_generated_image(session, auth_result, match.group(0), prompt)
+                            if generated_image is not None:
+                                yield generated_image
                         async for chunk in cls.iter_messages_line(session, auth_result, line, conversation, sources):
                             if isinstance(chunk, str):
                                 chunk = chunk.replace("\ue203", "").replace("\ue204", "").replace("\ue206", "")
@@ -568,10 +580,10 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
                     if c.get("content_type") == "text" and m.get("author", {}).get("role") == "tool" and "initial_text" in m.get("metadata", {}):
                         fields.is_thinking = True
                         yield Reasoning(status=m.get("metadata", {}).get("initial_text"))
-                    if c.get("content_type") == "multimodal_text":
-                        for part in c.get("parts"):
-                            if isinstance(part, dict) and part.get("content_type") == "image_asset_pointer":
-                                yield await cls.get_generated_image(session, auth_result, part, fields.prompt, fields.conversation_id)
+                    #if c.get("content_type") == "multimodal_text":
+                    #    for part in c.get("parts"):
+                    #        if isinstance(part, dict) and part.get("content_type") == "image_asset_pointer":
+                    #            yield await cls.get_generated_image(session, auth_result, part, fields.prompt, fields.conversation_id)
                     if m.get("author", {}).get("role") == "assistant":
                         if fields.parent_message_id is None:
                             fields.parent_message_id = v.get("message", {}).get("id")
@@ -668,9 +680,9 @@ class OpenaiChat(AsyncAuthedProvider, ProviderModelMixin):
             page.add_handler(nodriver.cdp.network.RequestWillBeSent, on_request)
             page = await browser.get(cls.url)
             user_agent = await page.evaluate("window.navigator.userAgent", return_by_value=True)
-            while not await page.evaluate("document.getElementById('prompt-textarea').id"):
+            while not await page.evaluate("document.getElementById('prompt-textarea')?.id"):
                 await asyncio.sleep(1)
-            while not await page.evaluate("document.querySelector('[data-testid=\"send-button\"]').type"):
+            while not await page.evaluate("document.querySelector('[data-testid=\"send-button\"]')?.type"):
                 await asyncio.sleep(1)
             await page.evaluate("document.querySelector('[data-testid=\"send-button\"]').click()")
             while True:

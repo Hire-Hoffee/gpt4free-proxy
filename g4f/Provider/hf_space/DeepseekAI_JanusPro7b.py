@@ -76,7 +76,7 @@ class DeepseekAI_JanusPro7b(AsyncGeneratorProvider, ProviderModelMixin):
         cookies: Cookies = None,
         api_key: str = None,
         zerogpu_uuid: str = "[object Object]",
-        return_conversation: bool = False,
+        return_conversation: bool = True,
         conversation: JsonConversation = None,
         seed: int = None,
         **kwargs
@@ -121,7 +121,7 @@ class DeepseekAI_JanusPro7b(AsyncGeneratorProvider, ProviderModelMixin):
                     }
                 } for i, image_file in enumerate(image_files)]
 
-            async with cls.run(method, session, prompt, conversation, None if media is None else media.pop(), seed) as response:
+            async with cls.run(method, session, prompt, conversation, None if not media else media.pop(), seed) as response:
                 await raise_for_status(response)
 
             async with cls.run("get", session, prompt, conversation, None, seed) as response:

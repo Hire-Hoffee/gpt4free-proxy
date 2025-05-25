@@ -25,7 +25,7 @@ EXTENSIONS_MAP: dict[str, str] = {
     "gif": "image/gif",
     "webp": "image/webp",
     # Audio
-    "wav": "audio/wav",
+    "wav": "audio/x-wav",
     "mp3": "audio/mpeg",
     "flac": "audio/flac",
     "opus": "audio/opus",
@@ -38,6 +38,7 @@ EXTENSIONS_MAP: dict[str, str] = {
 }
 
 MEDIA_TYPE_MAP: dict[str, str] = {value: key for key, value in EXTENSIONS_MAP.items()}
+MEDIA_TYPE_MAP["audio/webm"] = "webm"
 
 def to_image(image: ImageType, is_svg: bool = False) -> Image:
     """
@@ -106,6 +107,19 @@ def is_data_an_media(data, filename: str = None) -> str:
         return is_accepted_format(data)
     return is_data_uri_an_image(data)
 
+def is_valid_media(data, filename: str = None) -> str:
+    if is_valid_audio(data, filename):
+        return True
+    if filename:
+        extension = get_extension(filename)
+        if extension is not None:
+            media_type = EXTENSIONS_MAP[extension]
+            if media_type.startswith("image/"):
+                return media_type
+    if isinstance(data, bytes):
+        return is_accepted_format(data)
+    return is_data_uri_an_image(data)
+
 def is_data_an_audio(data_uri: str = None, filename: str = None) -> str:
     if filename:
         extension = get_extension(filename)
@@ -117,6 +131,14 @@ def is_data_an_audio(data_uri: str = None, filename: str = None) -> str:
         audio_format = re.match(r'^data:(audio/\w+);base64,', data_uri)
         if audio_format:
             return audio_format.group(1)
+
+def is_valid_audio(data_uri: str = None, filename: str = None) -> bool:
+    mimetype = is_data_an_audio(data_uri, filename)
+    if mimetype is None:
+        return False
+    if MEDIA_TYPE_MAP.get(mimetype) not in ("wav", "mp3"):
+        return False
+    return True
 
 def is_data_uri_an_image(data_uri: str) -> bool:
     """
@@ -285,27 +307,28 @@ def to_input_audio(audio: ImageType, filename: str = None) -> str:
         }
     raise ValueError("Invalid input audio")
 
-def use_aspect_ratio(extra_data: dict, aspect_ratio: str) -> Image:
-    extra_data = {key: value for key, value in extra_data.items() if value is not None}
-    if aspect_ratio == "1:1":
-        extra_data = {
-            "width": 1024,
-            "height": 1024,
-            **extra_data
-        }
-    elif aspect_ratio == "16:9":
-        extra_data = {
-            "width": 832,
-            "height": 480,
-            **extra_data
-        }
-    elif aspect_ratio == "9:16":
-        extra_data = {
-            "width": 480,
-            "height": 832,
-            **extra_data
-        }
-    return extra_data
+def use_aspect_ratio(extra_body: dict, aspect_ratio: str) -> Image:
+    extra_body = {key: value for key, value in extra_body.items() if value is not None}
+    if extra_body.get("width") is None or extra_body.get("height") is None:
+        if aspect_ratio == "1:1":
+            extra_body = {
+                "width": extra_body.get("width", 1024),
+                "height": extra_body.get("height", 1024),
+                **extra_body
+            }
+        elif aspect_ratio == "16:9":
+            extra_body = {
+                "width": extra_body.get("width", 832),
+                "height": extra_body.get("height", 480),
+                **extra_body
+            }
+        elif aspect_ratio == "9:16":
+            extra_body = {
+                "width": extra_body.get("width", 480),
+                "height": extra_body.get("height", 832),
+                **extra_body
+            }
+    return extra_body
 
 class ImageDataResponse():
     def __init__(

@@ -22,3 +22,4 @@ nodriver
 python-multipart
 pypdf2
 python-docx
+markitdown[all]

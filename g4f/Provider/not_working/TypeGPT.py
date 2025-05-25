@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import requests
 
-from .template import OpenaiTemplate
+from ..template import OpenaiTemplate
+from ...errors import ModelNotFoundError
+from ... import debug
 
 class TypeGPT(OpenaiTemplate):
     label = "TypeGpt"
     url = "https://chat.typegpt.net"
     api_base = "https://chat.typegpt.net/api/openai/v1"
-    working = True
+    working = False
     headers = {
         "accept": "application/json, text/event-stream",
         "accept-language": "de,en-US;q=0.9,en;q=0.8",
@@ -36,6 +38,10 @@ class TypeGPT(OpenaiTemplate):
     @classmethod
     def get_models(cls, **kwargs):
         if not cls.models:
-            cls.models = requests.get(f"{cls.url}/api/config").json()["customModels"].split(",")
-            cls.models = [model.split("@")[0][1:] for model in cls.models if model.startswith("+") and model not in cls.image_models]
+            try:
+                cls.models = requests.get(f"{cls.url}/api/config").json()["customModels"].split(",")
+                cls.models = [model.split("@")[0].strip("+") for model in cls.models if not model.startswith("-") and model not in cls.image_models]
+            except Exception as e:
+                cls.models = cls.fallback_models
+                debug.log(f"Error fetching models: {e}")
         return cls.models

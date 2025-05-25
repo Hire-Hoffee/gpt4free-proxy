@@ -19,7 +19,7 @@ from ..providers.asyncio import to_sync_generator
 from ..providers.any_provider import AnyProvider
 from ..Provider import OpenaiAccount, PollinationsImage
 from ..tools.run_tools import async_iter_run_tools, iter_run_tools
-from .stubs import ChatCompletion, ChatCompletionChunk, Image, ImagesResponse, UsageModel, ToolCallModel
+from .stubs import ChatCompletion, ChatCompletionChunk, Image, ImagesResponse, UsageModel, ToolCallModel, ClientResponse
 from .models import ClientModels
 from .types import IterResponse, Client as BaseClient
 from .service import convert_to_provider
@@ -41,9 +41,20 @@ except NameError:
 def add_chunk(content, chunk):
     if content == "" and isinstance(chunk, (MediaResponse, AudioResponse)):
         content = chunk
-    else:
+    elif not isinstance(chunk, (Reasoning, ToolCalls)):
         content = str(content) + str(chunk)
     return content
+
+def resolve_media(kwargs: dict, image = None, image_name: str = None) -> None:
+    if image is not None:
+        kwargs["media"] = [(image, image_name)]
+    elif "images" in kwargs:
+        kwargs["media"] = kwargs.pop("images")
+    if "media" in kwargs and not isinstance(kwargs["media"], list):
+        kwargs["media"] = [kwargs["media"]]
+    for idx, media in enumerate(kwargs.get("media", [])):
+        if not isinstance(media, (list, tuple)):
+            kwargs["media"][idx] = (media, os.path.basename(getattr(media, "name", "")))
 
 # Synchronous iter_response function
 def iter_response(
@@ -54,6 +65,7 @@ def iter_response(
     stop: Optional[list[str]] = None
 ) -> ChatCompletionResponseType:
     content = ""
+    reasoning_content = []
     finish_reason = None
     tool_calls = None
     usage = None
@@ -68,30 +80,30 @@ def iter_response(
     for chunk in response:
         if isinstance(chunk, FinishReason):
             finish_reason = chunk.reason
-            break
+            continue
         elif isinstance(chunk, JsonConversation):
             conversation = chunk
             continue
         elif isinstance(chunk, ToolCalls):
-            tool_calls = chunk.get_list()
-            continue
+            if not stream:
+                tool_calls = chunk.get_list()
+                continue
         elif isinstance(chunk, Usage):
             usage = chunk
             continue
         elif isinstance(chunk, ProviderInfo):
             provider = chunk
             continue
-        elif isinstance(chunk, BaseConversation):
-            yield chunk
-            continue
+        elif isinstance(chunk, Reasoning):
+            reasoning_content.append(chunk)
         elif isinstance(chunk, HiddenResponse):
             continue
         elif isinstance(chunk, Exception):
             continue
+        elif not chunk:
+            continue
 
         content = add_chunk(content, chunk)
-        if not content:
-            continue
         idx += 1
 
         if max_tokens is not None and idx >= max_tokens:
@@ -130,7 +142,8 @@ def iter_response(
         chat_completion = ChatCompletion.model_construct(
             content, finish_reason, completion_id, int(time.time()), usage=usage,
             **filter_none(tool_calls=[ToolCallModel.model_construct(**tool_call) for tool_call in tool_calls]) if tool_calls is not None else {},
-            conversation=None if conversation is None else conversation.get_dict()
+            conversation=None if conversation is None else conversation.get_dict(),
+            reasoning_content=reasoning_content if reasoning_content else None
         )
     if provider is not None:
         chat_completion.provider = provider.name
@@ -157,6 +170,7 @@ async def async_iter_response(
     stop: Optional[list[str]] = None
 ) -> AsyncChatCompletionResponseType:
     content = ""
+    reasoning_content = []
     finish_reason = None
     completion_id = ''.join(random.choices(string.ascii_letters + string.digits, k=28))
     idx = 0
@@ -169,27 +183,30 @@ async def async_iter_response(
         async for chunk in response:
             if isinstance(chunk, FinishReason):
                 finish_reason = chunk.reason
-                break
+                continue
             elif isinstance(chunk, JsonConversation):
                 conversation = chunk
                 continue
             elif isinstance(chunk, ToolCalls):
-                tool_calls = chunk.get_list()
-                continue
+                if not stream:
+                    tool_calls = chunk.get_list()
+                    continue
             elif isinstance(chunk, Usage):
                 usage = chunk
                 continue
             elif isinstance(chunk, ProviderInfo):
                 provider = chunk
                 continue
+            elif isinstance(chunk, Reasoning) and not stream:
+                reasoning_content.append(chunk)
             elif isinstance(chunk, HiddenResponse):
                 continue
             elif isinstance(chunk, Exception):
                 continue
+            elif not chunk:
+                continue
 
             content = add_chunk(content, chunk)
-            if not content:
-                continue
             idx += 1
 
             if max_tokens is not None and idx >= max_tokens:
@@ -230,7 +247,8 @@ async def async_iter_response(
                 **filter_none(
                     tool_calls=[ToolCallModel.model_construct(**tool_call) for tool_call in tool_calls]
                 ) if tool_calls is not None else {},
-                conversation=conversation
+                conversation=conversation,
+                reasoning_content=reasoning_content if reasoning_content else None
             )
         if provider is not None:
             chat_completion.provider = provider.name
@@ -238,6 +256,53 @@ async def async_iter_response(
         yield chat_completion
     finally:
         await safe_aclose(response)
+
+async def async_response(
+    response: AsyncIterator[Union[str, ResponseType]]
+) -> ClientResponse:
+    content = ""
+    response_id = ''.join(random.choices(string.ascii_letters + string.digits, k=28))
+    idx = 0
+    usage = None
+    provider: ProviderInfo = None
+    conversation: JsonConversation = None
+
+    async for chunk in response:
+        if isinstance(chunk, FinishReason):
+            continue
+        elif isinstance(chunk, JsonConversation):
+            conversation = chunk
+            continue
+        elif isinstance(chunk, ToolCalls):
+            continue
+        elif isinstance(chunk, Usage):
+            usage = chunk
+            continue
+        elif isinstance(chunk, ProviderInfo):
+            provider = chunk
+            continue
+        elif isinstance(chunk, HiddenResponse):
+            continue
+        elif isinstance(chunk, Exception):
+            continue
+
+        content = add_chunk(content, chunk)
+        if not content:
+            continue
+        idx += 1
+
+    if usage is None:
+        usage = UsageModel.model_construct(completion_tokens=idx, total_tokens=idx)
+    else:
+        usage = UsageModel.model_construct(**usage.get_dict())
+
+    response = ClientResponse.model_construct(
+        content, response_id, int(time.time()), usage=usage, conversation=conversation
+    )
+    if provider is not None:
+        response.provider = provider.name
+        response.model = provider.model
+    return response
 
 async def async_iter_append_model_and_provider(
         response: AsyncChatCompletionResponseType,
@@ -296,13 +361,9 @@ class Completions:
     ) -> ChatCompletion:
         if isinstance(messages, str):
             messages = [{"role": "user", "content": messages}]
-        if image is not None:
-            kwargs["media"] = [(image, image_name)]
-        elif "images" in kwargs:
-            kwargs["media"] = kwargs.pop("images")
-        for idx, media in kwargs.get("media", []):
-            if not isinstance(media, (list, tuple)):
-                kwargs["media"][idx] = (media[0], media[1] if media[1] is not None else getattr(image, "name", None))
+        resolve_media(kwargs, image, image_name)
+        if hasattr(model, "name"):
+            model = model.name
         if provider is None:
             provider = self.provider
             if provider is None:
@@ -483,6 +544,7 @@ class Images:
     async def async_create_variation(
         self,
         image: ImageType,
+        image_name: str = None,
         model: Optional[str] = None,
         provider: Optional[ProviderType] = None,
         response_format: Optional[str] = None,
@@ -494,12 +556,7 @@ class Images:
         if proxy is None:
             proxy = self.client.proxy
         prompt = "create a variation of this image"
-        if image is not None:
-            kwargs["media"] = image
-        for idx, media in kwargs.get("media", []):
-            if not isinstance(media, (list, tuple)):
-                kwargs["media"][idx] = (media[0], media[1] if media[1] is not None else getattr(image, "name", None))
-
+        resolve_media(kwargs, image, image_name)
         error = None
         response = None
         if isinstance(provider_handler, IterListProvider):
@@ -571,6 +628,7 @@ class AsyncClient(BaseClient):
         self.models: ClientModels = ClientModels(self, provider, media_provider)
         self.images: AsyncImages = AsyncImages(self, media_provider)
         self.media: AsyncImages = self.images
+        self.responses: AsyncResponses = AsyncResponses(self, provider)
 
 class AsyncChat:
     completions: AsyncCompletions
@@ -601,13 +659,9 @@ class AsyncCompletions:
     ) -> Awaitable[ChatCompletion]:
         if isinstance(messages, str):
             messages = [{"role": "user", "content": messages}]
-        if image is not None:
-            kwargs["media"] = [(image, image_name)]
-        elif "images" in kwargs:
-            kwargs["media"] = kwargs.pop("images")
-        for idx, media in kwargs.get("media", []):
-            if not isinstance(media, (list, tuple)):
-                kwargs["media"][idx] = (media[0], media[1] if media[1] is not None else getattr(image, "name", None))
+        resolve_media(kwargs, image, image_name)
+        if hasattr(model, "name"):
+            model = model.name
         if provider is None:
             provider = self.provider
             if provider is None:
@@ -674,3 +728,51 @@ class AsyncImages(Images):
         return await self.async_create_variation(
            image, model, provider, response_format, **kwargs
         )
+
+class AsyncResponses():
+    def __init__(self, client: AsyncClient, provider: Optional[ProviderType] = None):
+        self.client: AsyncClient = client
+        self.provider: ProviderType = provider
+
+    async def create(
+        self,
+        input: str,
+        model: str = "",
+        provider: Optional[ProviderType] = None,
+        instructions: Optional[str] = None,
+        proxy: Optional[str] = None,
+        api_key: Optional[str] = None,
+        **kwargs
+    ) -> ClientResponse:
+        if isinstance(input, str):
+            input = [{"role": "user", "content": input}]
+        if instructions is not None:
+            input = [{"role": "developer", "content": instructions}] + input
+        for idx, message in enumerate(input):
+            if isinstance(message["content"], list):
+                for key, value in enumerate(message["content"]):
+                    if isinstance(value, dict) and value.get("type") == "input_text":
+                        message["content"][key] = {"type": "text", "text": value.get("text")}
+                    input[idx] = {"role": message["role"], "content": message["content"]}
+        resolve_media(kwargs)
+        if hasattr(model, "name"):
+            model = model.name
+        if provider is None:
+            provider = self.provider
+            if provider is None:
+                provider = AnyProvider
+        if isinstance(provider, str):
+            provider = convert_to_provider(provider)
+
+        response = async_iter_run_tools(
+            provider,
+            model=model,
+            messages=input,
+            **filter_none(
+                proxy=self.client.proxy if proxy is None else proxy,
+                api_key=self.client.api_key if api_key is None else api_key
+            ),
+            **kwargs
+        )
+
+        return await async_response(response)
