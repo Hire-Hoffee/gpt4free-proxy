@@ -7,7 +7,6 @@ import asyncio
 
 app = FastAPI()
 
-
 @app.post("/data")
 async def get_data(request: Request):
     data = await request.json()
@@ -22,16 +21,13 @@ async def get_data(request: Request):
                 timeout=10,
             )
 
-            if response and detect(response) != "zh-cn":
-                print(
-                    f"\nModel: {model}, Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                )
+            if response and detect(response) != "zh-cn" and response != '**NETWORK ERROR DUE TO HIGH TRAFFIC. PLEASE REGENERATE OR REFRESH THIS PAGE.**':
+                print(f"\nModel: {model}, Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
                 return response
 
         except Exception as e:
             print(e)
 
     return "Some error occurred :("
-
 
 uvicorn.run(app, host="0.0.0.0", port=8989)
