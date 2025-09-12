@@ -1,18 +1,13 @@
-import codecs
 import os
 
 from setuptools import find_packages, setup
 
-STATIC_HOST = "gpt4free.github.io"
+current_dir = os.path.abspath(os.path.dirname(__file__))
 
-here = os.path.abspath(os.path.dirname(__file__))
-
-with codecs.open(os.path.join(here, 'README.md'), encoding='utf-8') as fh:
-    long_description = '\n' + fh.read()
+with open(os.path.join(current_dir, 'README.md'), "r", encoding="utf-8") as f:
+    long_description = f.read()
 
 long_description = long_description.replace("[!NOTE]", "")
-long_description = long_description.replace("(docs/images/", f"(https://{STATIC_HOST}/docs/images/")
-long_description = long_description.replace("(docs/", f"(https://github.com/gpt4free/{STATIC_HOST}/blob/main/docs/")
 
 INSTALL_REQUIRE = [
     "requests",
@@ -26,9 +21,9 @@ EXTRA_REQUIRE = {
     'all': [
         "curl_cffi>=0.6.2",
         "certifi",
-        "browser_cookie3",         # get_cookies
-        "duckduckgo-search>=5.0",  # internet.search
-        "beautifulsoup4",          # internet.search and bing.create_images
+        "browser_cookie3", # get_cookies
+        "ddgs",            # web_search
+        "beautifulsoup4",  # web_search and bing.create_images
         "platformdirs",
         "aiohttp_socks",           # proxy
         "pillow",                  # image
@@ -38,27 +33,28 @@ EXTRA_REQUIRE = {
         "uvicorn",                 # api
         "nodriver",
         "python-multipart",
+        "a2wsgi",
         "pywebview",
         "plyer",
         "setuptools",
-        "odfpy", # files
-        "ebooklib",
-        "openpyxl",
-        "markitdown[all]"
+        "markitdown[all]",
+        "python-dotenv"
     ],
     'slim': [
         "curl_cffi>=0.6.2",
         "certifi",
         "browser_cookie3",
-        "duckduckgo-search>=5.0"  ,# internet.search
-        "beautifulsoup4",          # internet.search and bing.create_images
+        "ddgs",           # web_search
+        "beautifulsoup4", # web_search and bing.create_images
         "aiohttp_socks",           # proxy
         "pillow",                  # image
         "werkzeug", "flask",       # gui
         "fastapi",                 # api
         "uvicorn",                 # api
         "python-multipart",
-        "markitdown[pdf, docx, pptx]"
+        "a2wsgi",
+        "markitdown[all]",
+        "python-dotenv"
     ],
     "image": [
         "pillow",
@@ -79,21 +75,18 @@ EXTRA_REQUIRE = {
     "gui": [
         "werkzeug", "flask",
         "beautifulsoup4", "pillow",
-        "duckduckgo-search>=5.0",
+        "ddgs",
     ],
     "search": [
         "beautifulsoup4",
         "pillow",
-        "duckduckgo-search>=5.0",
+        "ddgs",
     ],
     "local": [
         "gpt4all"
     ],
     "files": [
         "beautifulsoup4",
-        "odfpy",
-        "ebooklib",
-        "openpyxl",
         "markitdown[all]"
     ]
 }
@@ -113,7 +106,7 @@ setup(
     long_description=long_description,
     packages=find_packages(),
     package_data={
-        'g4f': ['g4f/interference/*', 'g4f/gui/client/*', 'g4f/gui/server/*', 'g4f/Provider/npm/*', 'g4f/local/models/*']
+        'g4f': []
     },
     include_package_data=True,
     install_requires=INSTALL_REQUIRE,
@@ -127,29 +120,50 @@ setup(
         'Bug Tracker': 'https://github.com/xtekky/gpt4free/issues',  # Link to issue tracker
     },
     keywords=[
-        'python',
-        'chatbot',
-        'reverse-engineering',
-        'openai',
-        'chatbots',
-        'gpt',
-        'language-model',
-        'gpt-3',
-        'gpt3',
-        'openai-api',
-        'gpt-4',
-        'gpt4',
-        'chatgpt',
-        'chatgpt-api',
-        'openai-chatgpt',
-        'chatgpt-free',
-        'chatgpt-4',
-        'chatgpt4',
-        'chatgpt4-api',
-        'free',
-        'free-gpt',
-        'gpt4free',
-        'g4f',
+        "gpt4free",
+        "gpt4free.js",
+        "g4f",
+        "g4f.dev",
+        "javascript",
+        "npm",
+        "browser",
+        "gpt",
+        "chatgpt",
+        "deepseek",
+        "openai",
+        "ai",
+        "client",
+        "sdk",
+        "free",
+        "ai",
+        "gpt-4",
+        "gpt-4o",
+        "chat",
+        "api",
+        "browser",
+        "ai",
+        "ai",
+        "js",
+        "client",
+        "text",
+        "generation",
+        "image",
+        "generation",
+        "in-browser",
+        "ai",
+        "frontend",
+        "ai",
+        "openai",
+        "alternative",
+        "javascript",
+        "ai",
+        "library",
+        "nodejs",
+        "prompt",
+        "engineering",
+        "chatbot",
+        "ai",
+        "integration"
     ],
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',

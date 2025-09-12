@@ -66,16 +66,23 @@ def format_prompt(messages: Messages, add_special_tokens: bool = False, do_conti
 def get_system_prompt(messages: Messages) -> str:
     return "\n".join([m["content"] for m in messages if m["role"] in ("developer", "system")])
 
-def get_last_user_message(messages: Messages) -> str:
+def get_last_user_message(messages: Messages, include_buckets: bool = True) -> str:
     user_messages = []
-    last_message = None if len(messages) == 0 else messages[-1]
-    messages = messages.copy()
-    while last_message is not None and messages:
-        last_message = messages.pop()
-        if last_message["role"] == "user":
-            content = to_string(last_message.get("content")).strip()
-            if content:
+    for message in messages[::-1]:
+        if message.get("role") == "user" or not user_messages:
+            if message.get("role") != "user":
+                continue
+            content = message.get("content")
+            if include_buckets:
+                content = to_string(content).strip()
+            if isinstance(content, str):
                 user_messages.append(content)
+            else:
+                for content_item in content:
+                    if content_item.get("type") == "text":
+                        content = content_item.get("text").strip()
+                        if content:
+                            user_messages.append(content)
         else:
             return "\n".join(user_messages[::-1])
     return "\n".join(user_messages[::-1])
@@ -88,7 +95,7 @@ def get_last_message(messages: Messages, prompt: str = None) -> str:
                 prompt = content
     return prompt
 
-def format_image_prompt(messages, prompt: str = None) -> str:
+def format_media_prompt(messages, prompt: str = None) -> str:
     if prompt is None:
         return get_last_user_message(messages)
     return prompt

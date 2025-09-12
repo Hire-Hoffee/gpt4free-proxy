@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-
+import random
 from asyncio import AbstractEventLoop
 from concurrent.futures import ThreadPoolExecutor
 from abc import abstractmethod
@@ -20,7 +20,8 @@ from .asyncio import get_running_loop, to_sync_generator, to_async_iterator
 from .response import BaseConversation, AuthResult
 from .helper import concat_chunks
 from ..cookies import get_cookies_dir
-from ..errors import ModelNotSupportedError, ResponseError, MissingAuthError, NoValidHarFileError, PaymentRequiredError
+from ..errors import ModelNotFoundError, ResponseError, MissingAuthError, NoValidHarFileError, PaymentRequiredError, CloudflareError
+from ..tools.run_tools import AuthManager
 from .. import debug
 
 SAFE_PARAMETERS = [
@@ -32,9 +33,9 @@ SAFE_PARAMETERS = [
     "frequency_penalty", "presence_penalty",
     "max_tokens", "stop",
     "api_key", "api_base", "seed", "width", "height",
-    "max_retries", "web_search",
+    "max_retries", "web_search", "cache",
     "guidance_scale", "num_inference_steps", "randomize_seed",
-    "safe", "enhance", "private", "aspect_ratio", "n",
+    "safe", "enhance", "private", "aspect_ratio", "n", "transparent"
 ]
 
 BASIC_PARAMETERS = {
@@ -73,7 +74,6 @@ class AbstractProvider(BaseProvider):
         cls,
         model: str,
         messages: Messages,
-        stream: bool,
         **kwargs
     ) -> CreateResult:
         """
@@ -126,12 +126,30 @@ class AbstractProvider(BaseProvider):
         )
 
     @classmethod
-    def get_create_function(cls) -> callable:
-        return cls.create_completion
+    def create_function(cls, *args, **kwargs) -> CreateResult:
+        """
+        Creates a completion using the synchronous method.
+
+        Args:
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            CreateResult: The result of the completion creation.
+        """
+        return cls.create_completion(*args, **kwargs)
 
     @classmethod
-    def get_async_create_function(cls) -> callable:
-        return cls.create_async
+    def async_create_function(cls, *args, **kwargs) -> AsyncResult:
+        """
+        Creates a completion using the synchronous method.
+
+        Args:
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            CreateResult: The result of the completion creation.
+        """
+        return cls.create_async(*args, **kwargs)
 
     @classmethod
     def get_parameters(cls, as_json: bool = False) -> dict[str, Parameter]:
@@ -221,7 +239,6 @@ class AsyncProvider(AbstractProvider):
         cls,
         model: str,
         messages: Messages,
-        stream: bool = False,
         **kwargs
     ) -> CreateResult:
         """
@@ -231,7 +248,6 @@ class AsyncProvider(AbstractProvider):
             cls (type): The class on which this method is called.
             model (str): The model to use for creation.
             messages (Messages): The messages to process.
-            stream (bool): Indicates whether to stream the results. Defaults to False.
             loop (AbstractEventLoop, optional): The event loop to use. Defaults to None.
             **kwargs: Additional keyword arguments.
 
@@ -264,26 +280,20 @@ class AsyncProvider(AbstractProvider):
         """
         raise NotImplementedError()
 
-    @classmethod
-    def get_create_function(cls) -> callable:
-        return cls.create_completion
-
-    @classmethod
-    def get_async_create_function(cls) -> callable:
-        return cls.create_async
-
 class AsyncGeneratorProvider(AbstractProvider):
     """
     Provides asynchronous generator functionality for streaming results.
     """
     supports_stream = True
+    use_stream_timeout = True
 
     @classmethod
     def create_completion(
         cls,
         model: str,
         messages: Messages,
-        stream: bool = True,
+        timeout: int = None,
+        stream_timeout: int = None,
         **kwargs
     ) -> CreateResult:
         """
@@ -293,7 +303,6 @@ class AsyncGeneratorProvider(AbstractProvider):
             cls (type): The class on which this method is called.
             model (str): The model to use for creation.
             messages (Messages): The messages to process.
-            stream (bool): Indicates whether to stream the results. Defaults to True.
             loop (AbstractEventLoop, optional): The event loop to use. Defaults to None.
             **kwargs: Additional keyword arguments.
 
@@ -301,8 +310,8 @@ class AsyncGeneratorProvider(AbstractProvider):
             CreateResult: The result of the streaming completion creation.
         """
         return to_sync_generator(
-            cls.create_async_generator(model, messages, stream=stream, **kwargs),
-            stream=stream
+            cls.create_async_generator(model, messages, **kwargs),
+            timeout=stream_timeout if cls.use_stream_timeout is None else timeout,
         )
 
     @staticmethod
@@ -310,7 +319,6 @@ class AsyncGeneratorProvider(AbstractProvider):
     async def create_async_generator(
         model: str,
         messages: Messages,
-        stream: bool = True,
         **kwargs
     ) -> AsyncResult:
         """
@@ -319,7 +327,6 @@ class AsyncGeneratorProvider(AbstractProvider):
         Args:
             model (str): The model to use for creation.
             messages (Messages): The messages to process.
-            stream (bool): Indicates whether to stream the results. Defaults to True.
             **kwargs: Additional keyword arguments.
 
         Raises:
@@ -331,12 +338,29 @@ class AsyncGeneratorProvider(AbstractProvider):
         raise NotImplementedError()
 
     @classmethod
-    def get_create_function(cls) -> callable:
-        return cls.create_completion
+    async def async_create_function(cls, *args, **kwargs) -> AsyncResult:
+        """
+        Creates a completion using the synchronous method.
 
-    @classmethod
-    def get_async_create_function(cls) -> callable:
-        return cls.create_async_generator
+        Args:
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            CreateResult: The result of the completion creation.
+        """
+        response = cls.create_async_generator(*args, **kwargs)
+        if "stream_timeout" in kwargs or "timeout" in kwargs:
+            while True:
+                try:
+                    yield await asyncio.wait_for(
+                        response.__anext__(),
+                        timeout=kwargs.get("stream_timeout") if cls.use_stream_timeout else kwargs.get("timeout")
+                    )
+                except StopAsyncIteration:
+                    break
+        else:
+            async for chunk in response:
+                yield chunk
 
 class ProviderModelMixin:
     default_model: str = None
@@ -348,24 +372,38 @@ class ProviderModelMixin:
     video_models: list = []
     audio_models: dict = {}
     last_model: str = None
+    models_loaded: bool = False
 
     @classmethod
-    def get_models(cls, **kwargs) -> list[str]:
+    def get_models(cls, api_key: str = None, **kwargs) -> list[str]:
         if not cls.models and cls.default_model is not None:
-            return [cls.default_model]
+            cls.models = [cls.default_model]
+        if not cls.models_loaded and hasattr(cls, "get_cache_file"):
+            if cls.get_cache_file().exists():
+                cls.live += 1
+            elif not api_key:
+                api_key = AuthManager.load_api_key(cls)
+                if api_key:
+                    cls.live += 1
+        cls.models_loaded = True
         return cls.models
 
     @classmethod
     def get_model(cls, model: str, **kwargs) -> str:
         if not model and cls.default_model is not None:
             model = cls.default_model
-        elif model in cls.model_aliases:
-            model = cls.model_aliases[model]
-        else:
+        if model in cls.model_aliases:
+            alias = cls.model_aliases[model]
+            if isinstance(alias, list):
+                selected_model = random.choice(alias)
+                debug.log(f"{cls.__name__}: Selected model '{selected_model}' from alias '{model}'")
+                return selected_model
+            debug.log(f"{cls.__name__}: Using model '{alias}' for alias '{model}'")
+            return alias
+        if model not in cls.model_aliases.values():
             if model not in cls.get_models(**kwargs) and cls.models:
-                raise ModelNotSupportedError(f"Model is not supported: {model} in: {cls.__name__} Valid models: {cls.models}")
+                raise ModelNotFoundError(f"Model not found: {model} in: {cls.__name__} Valid models: {cls.models}")
         cls.last_model = model
-        debug.last_model = model
         return model
 
 class RaiseErrorMixin():
@@ -393,8 +431,8 @@ class RaiseErrorMixin():
                 raise ResponseError(data["error"]["message"])
             else:
                 raise ResponseError(data["error"])
-        elif ("choices" not in data or not data["choices"]) and "data" not in data:
-            raise ResponseError(f"Invalid response: {json.dumps(data)}")
+        #elif ("choices" not in data or not data["choices"]) and "data" not in data:
+        #    raise ResponseError(f"Invalid response: {json.dumps(data)}")
 
 class AuthFileMixin():
 
@@ -418,14 +456,6 @@ class AsyncAuthedProvider(AsyncGeneratorProvider, AuthFileMixin):
         return asyncio.run(auth_result)
 
     @classmethod
-    def get_create_function(cls) -> callable:
-        return cls.create_completion
-
-    @classmethod
-    def get_async_create_function(cls) -> callable:
-        return cls.create_async_generator
-
-    @classmethod
     def write_cache_file(cls, cache_file: Path, auth_result: AuthResult = None):
          if auth_result is not None:
             cache_file.parent.mkdir(parents=True, exist_ok=True)
@@ -438,8 +468,24 @@ class AsyncAuthedProvider(AsyncGeneratorProvider, AuthFileMixin):
                     json.dump(auth_result, cache_file, default=toJSON)
             except TypeError as e:
                 raise RuntimeError(f"Failed to save: {auth_result.get_dict()}\n{type(e).__name__}: {e}")
-         elif cache_file.exists():
-            cache_file.unlink()
+         # elif cache_file.exists():
+         #    cache_file.unlink()
+
+    @classmethod
+    def get_auth_result(cls) -> AuthResult:
+        """
+        Retrieves the authentication result from cache.
+        """
+        cache_file = cls.get_cache_file()
+        if cache_file.exists():
+            try:
+                with cache_file.open("r") as f:
+                    return AuthResult(**json.load(f))
+            except json.JSONDecodeError:
+                cache_file.unlink()
+                raise MissingAuthError(f"Invalid auth file: {cache_file}")
+        else:
+            raise MissingAuthError
 
     @classmethod
     def create_completion(
@@ -451,24 +497,16 @@ class AsyncAuthedProvider(AsyncGeneratorProvider, AuthFileMixin):
         auth_result: AuthResult = None
         cache_file = cls.get_cache_file()
         try:
-            if cache_file.exists():
-                try:
-                    with cache_file.open("r") as f:
-                        auth_result = AuthResult(**json.load(f))
-                except json.JSONDecodeError:
-                    cache_file.unlink()
-                    raise MissingAuthError(f"Invalid auth file: {cache_file}")
-            else:
-                raise MissingAuthError
+            auth_result = cls.get_auth_result()
             yield from to_sync_generator(cls.create_authed(model, messages, auth_result, **kwargs))
-        except (MissingAuthError, NoValidHarFileError):
+        except (MissingAuthError, NoValidHarFileError, CloudflareError):
             response = cls.on_auth(**kwargs)
             for chunk in response:
                 if isinstance(chunk, AuthResult):
                     auth_result = chunk
                 else:
                     yield chunk
-            for chunk in to_sync_generator(cls.create_authed(model, messages, auth_result, **kwargs)):
+            for chunk in to_sync_generator(cls.create_authed(model, messages, auth_result, **kwargs), kwargs.get("stream_timeout", kwargs.get("timeout"))):
                 if cache_file is not None:
                     cls.write_cache_file(cache_file, auth_result)
                     cache_file = None
@@ -484,21 +522,23 @@ class AsyncAuthedProvider(AsyncGeneratorProvider, AuthFileMixin):
         auth_result: AuthResult = None
         cache_file = cls.get_cache_file()
         try:
-            if cache_file.exists():
-                try:
-                    with cache_file.open("r") as f:
-                        auth_result = AuthResult(**json.load(f))
-                except json.JSONDecodeError:
-                    cache_file.unlink()
-                    raise MissingAuthError(f"Invalid auth file: {cache_file}")
-            else:
-                raise MissingAuthError
+            auth_result = cls.get_auth_result()
             response = to_async_iterator(cls.create_authed(model, messages, **kwargs, auth_result=auth_result))
-            async for chunk in response:
-                yield chunk
-        except (MissingAuthError, NoValidHarFileError):
-            if cache_file.exists():
-                cache_file.unlink()
+            if "stream_timeout" in kwargs or "timeout" in kwargs:
+                while True:
+                    try:
+                        yield await asyncio.wait_for(
+                            response.__anext__(),
+                            timeout=kwargs.get("stream_timeout") if cls.use_stream_timeout else kwargs.get("timeout")
+                        )
+                    except StopAsyncIteration:
+                        break
+            else:
+                async for chunk in response:
+                    yield chunk
+        except (MissingAuthError, NoValidHarFileError, CloudflareError):
+            # if cache_file.exists():
+            #     cache_file.unlink()
             response = cls.on_auth_async(**kwargs)
             async for chunk in response:
                 if isinstance(chunk, AuthResult):

@@ -5,13 +5,18 @@ from os import path
 
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
+# Enable logging
 import g4f
-
 g4f.debug.logging = True
+
+# Read auth files
+from g4f.cookies import read_cookie_files
+read_cookie_files()
 
 def read_code(text):
     if match := re.search(r"```(python|py|)\n(?P<code>[\S\s]+?)\n```", text):
         return match.group("code")
+    return text
 
 def input_command():
     print("Enter/Paste the cURL command. Ctrl-D or Ctrl-Z ( windows ) to save it.")
@@ -113,13 +118,13 @@ And replace "gpt-3.5-turbo" with `model`.
     print("Create code...")
     response = []
     for chunk in g4f.ChatCompletion.create(
-        model=g4f.models.gpt_4o,
-        messages=[{"role": "user", "content": prompt}],
-        timeout=300,
+        model=g4f.models.default,
+        messages=prompt,
         stream=True,
     ):
         print(chunk, end="", flush=True)
-        response.append(chunk)
+        if not isinstance(chunk, Exception):
+            response.append(str(chunk))
     print()
     response = "".join(response)
 

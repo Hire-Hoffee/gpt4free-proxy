@@ -14,55 +14,28 @@ from ..providers.response import TitleGeneration, Reasoning, FinishReason
 from ..errors import ModelNotFoundError
 from .. import debug
 
+
 class LambdaChat(AsyncGeneratorProvider, ProviderModelMixin):
     label = "Lambda Chat"
     url = "https://lambda.chat"
     conversation_url = f"{url}/conversation"
 
     working = True
+    active_by_default = True
 
     default_model = "deepseek-llama3.3-70b"
-    reasoning_model = "deepseek-r1"
     models = [
         default_model,
-        reasoning_model,
+        "apriel-5b-instruct",
         "hermes-3-llama-3.1-405b-fp8",
-        "hermes3-405b-fp8-128k",
-        "llama3.1-nemotron-70b-instruct",
-        "lfm-40b",
         "llama3.3-70b-instruct-fp8",
-        "qwen25-coder-32b-instruct"
+        "llama3.3-70b-instruct-fp8",
+        "qwen3-32b-fp8",
     ]
     model_aliases = {
-        "deepseek-v3": default_model,
-        "hermes-3-405b": ["hermes3-405b-fp8-128k", "hermes-3-llama-3.1-405b-fp8"],
-        "nemotron-70b": "llama3.1-nemotron-70b-instruct",
-        "qwen-2.5-coder-32b": "qwen25-coder-32b-instruct"
+        "llama-3.3-70b": "llama3.3-70b-instruct-fp8",
+        "qwen-3-32b": "qwen3-32b-fp8"
     }
-
-    @classmethod
-    def get_model(cls, model: str) -> str:
-        """Get the internal model name from the user-provided model name."""
-        
-        if not model:
-            return cls.default_model
-        
-        # Check if the model exists directly in our models list
-        if model in cls.models:
-            return model
-        
-        # Check if there's an alias for this model
-        if model in cls.model_aliases:
-            alias = cls.model_aliases[model]
-            # If the alias is a list, randomly select one of the options
-            if isinstance(alias, list):
-                selected_model = random.choice(alias)
-                debug.log(f"{cls.__name__}: Selected model '{selected_model}' from alias '{model}'")
-                return selected_model
-            debug.log(f"{cls.__name__}: Using model '{alias}' for alias '{model}'")
-            return alias
-        
-        raise ModelNotFoundError(f"Model {model} not found")
 
     @classmethod
     async def create_async_generator(
@@ -178,6 +151,8 @@ class LambdaChat(AsyncGeneratorProvider, ProviderModelMixin):
                 data=form_data,
                 proxy=proxy
             ) as response:
+                if not response.ok:
+                    debug.log(f"LambdaChat: Request Body: {form_data}")
                 await raise_for_status(response)
                 
                 async for chunk in response.content:

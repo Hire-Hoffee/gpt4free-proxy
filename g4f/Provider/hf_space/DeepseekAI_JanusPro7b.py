@@ -9,14 +9,14 @@ import urllib.parse
 
 from ...typing import AsyncResult, Messages, Cookies, MediaListType
 from ..base_provider import AsyncGeneratorProvider, ProviderModelMixin
-from ..helper import format_prompt, format_image_prompt
+from ..helper import format_prompt, format_media_prompt
 from ...providers.response import JsonConversation, ImageResponse, Reasoning
 from ...requests.aiohttp import StreamSession, StreamResponse, FormData
 from ...requests.raise_for_status import raise_for_status
 from ...tools.media import merge_media
 from ...image import to_bytes, is_accepted_format
 from ...cookies import get_cookies
-from ...errors import ResponseError
+from ...errors import ResponseError, ModelNotFoundError
 from ... import debug
 from .raise_for_status import raise_for_status
 
@@ -81,11 +81,13 @@ class DeepseekAI_JanusPro7b(AsyncGeneratorProvider, ProviderModelMixin):
         seed: int = None,
         **kwargs
     ) -> AsyncResult:
+        if model and "janus" not in model:
+            raise ModelNotFoundError(f"Model '{model}' not found. Available models: {', '.join(cls.models)}")
         method = "post"
         if model == cls.default_image_model or prompt is not None:
             method = "image"
         prompt = format_prompt(messages) if prompt is None and conversation is None else prompt
-        prompt = format_image_prompt(messages, prompt)
+        prompt = format_media_prompt(messages, prompt)
         if seed is None:
             seed = random.randint(1000, 999999)
 
@@ -152,7 +154,7 @@ class DeepseekAI_JanusPro7b(AsyncGeneratorProvider, ProviderModelMixin):
                                     json_data['output']['error'] = json_data['output']['error'].split(" <a ")[0]
                                     raise ResponseError("Missing images input" if json_data['output']['error'] and "AttributeError" in json_data['output']['error'] else json_data['output']['error'])
                                 if 'output' in json_data and 'data' in json_data['output']:
-                                    yield Reasoning(status="Finished")
+                                    yield Reasoning(status="")
                                     if "image" in json_data['output']['data'][0][0]:
                                         yield ImageResponse([image["image"]["url"] for image in json_data['output']['data'][0]], prompt)
                                     else:

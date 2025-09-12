@@ -1,18 +1,33 @@
 from __future__ import annotations
 
-from ..typing import AsyncResult, Messages, MediaListType
+import os
+import re
+import json
+from ..typing import AsyncResult, Messages, MediaListType, Union
 from ..errors import ModelNotFoundError
 from ..image import is_data_an_audio
-from ..providers.retry_provider import IterListProvider
-from ..providers.types import ProviderType
+from ..providers.retry_provider import RotatedProvider
 from ..Provider.needs_auth import OpenaiChat, CopilotAccount
 from ..Provider.hf_space import HuggingSpace
-from ..Provider import Cloudflare, Gemini, Grok, DeepSeekAPI, PerplexityLabs, LambdaChat, PollinationsAI, FreeRouter
-from ..Provider import Microsoft_Phi_4_Multimodal, DeepInfraChat, Blackbox, EdgeTTS, gTTS, MarkItDown
-from ..Provider import HarProvider, DDG, HuggingFace, HuggingFaceMedia
+from ..Provider import Custom, PollinationsImage, OpenaiAccount, Copilot, Cloudflare, Gemini, Grok, PerplexityLabs, LambdaChat, PollinationsAI, PuterJS
+from ..Provider import Microsoft_Phi_4_Multimodal, DeepInfra, LMArena, EdgeTTS, gTTS, MarkItDown, OpenAIFM
+from ..Provider import HuggingFace, HuggingFaceMedia, Azure, Qwen, EasyChat, GLM, OpenRouterFree, GeminiPro
 from .base_provider import AsyncGeneratorProvider, ProviderModelMixin
 from .. import Provider
 from .. import models
+from .. import debug
+from .any_model_map import audio_models, image_models, vision_models, video_models, model_map, models_count, parents, model_aliases
+
+# Add providers to existing models on map
+PROVIDERS_LIST_2 = [
+    OpenaiChat, Copilot, CopilotAccount, PollinationsAI, PerplexityLabs, Gemini, Grok, Azure, Qwen, EasyChat, GLM, OpenRouterFree
+]
+
+# Add all models to the model map
+PROVIDERS_LIST_3 = [
+    LambdaChat, DeepInfra, HuggingFace, HuggingFaceMedia, LMArena,
+    PuterJS, Cloudflare, HuggingSpace
+]
 
 LABELS = {
     "default": "Default",
@@ -24,176 +39,292 @@ LABELS = {
     "grok": "xAI: Grok",
     "claude": "Anthropic: Claude",
     "command": "Cohere: Command",
-    "phi": "Microsoft: Phi",
+    "phi": "Microsoft: Phi / WizardLM",
     "mistral": "Mistral",
     "PollinationsAI": "Pollinations AI",
+    "voices": "Voices",
     "perplexity": "Perplexity Labs",
+    "openrouter": "OpenRouter",
+    "glm": "GLM",
+    "tulu": "Tulu",
+    "reka": "Reka",
+    "hermes": "Hermes",
     "video": "Video Generation",
     "image": "Image Generation",
     "other": "Other Models",
 }
 
-class AnyProvider(AsyncGeneratorProvider, ProviderModelMixin):
+class AnyModelProviderMixin(ProviderModelMixin):
+    """Mixin to provide model-related methods for providers."""
+
     default_model = "default"
-    working = True
-    models_storage: dict[str, list[str]] = {}
+    audio_models = audio_models
+    image_models = image_models
+    vision_models = vision_models
+    video_models = video_models
+    models_count = models_count
+    models = list(model_map.keys())
+    model_map: dict[str, dict[str, str]] = model_map
+    model_aliases: dict[str, str] = model_aliases
+
+    @classmethod
+    def extend_ignored(cls, ignored: list[str]) -> list[str]:
+        """Extend the ignored list with parent providers."""
+        for ignored_provider in ignored:
+            if ignored_provider in parents and parents[ignored_provider] not in ignored:
+                ignored.extend(parents[ignored_provider])
+        return ignored
+
+    @classmethod
+    def get_models(cls, ignored: list[str] = []) -> list[str]:
+        if not cls.models:
+            cls.update_model_map()
+        if not ignored:
+            return cls.models
+        ignored = cls.extend_ignored(ignored)
+        filtered = []
+        for model, providers in cls.model_map.items():
+            for provider in providers.keys():
+                if provider not in ignored:
+                    filtered.append(model)
+                    break
+        return filtered
+
+    @classmethod
+    def update_model_map(cls):
+        cls.create_model_map()
+        file = os.path.join(os.path.dirname(__file__), "any_model_map.py")
+        with open(file, "w", encoding="utf-8") as f:
+            for key in ["audio_models", "image_models", "vision_models", "video_models", "model_map", "models_count", "parents", "model_aliases"]:
+                value = getattr(cls, key)
+                f.write(f"{key} = {json.dumps(value, indent=2) if isinstance(value, dict) else repr(value)}\n")
+
+    @classmethod
+    def create_model_map(cls):
+        cls.audio_models = []
+        cls.image_models = []
+        cls.vision_models = []
+        cls.video_models = []
+
+        # Get models from the models registry
+        cls.model_map = {
+            "default": {provider.__name__: "" for provider in models.default.best_provider.providers},
+        }
+        cls.model_map.update({ 
+            name: {
+                provider.__name__: model.get_long_name() for provider in providers
+                if provider.working
+            } for name, (model, providers) in models.__models__.items()
+        })
+        for name, (model, providers) in models.__models__.items():
+            if isinstance(model, models.ImageModel):
+                cls.image_models.append(name)
+
+        # Process special providers
+        for provider in PROVIDERS_LIST_2:
+            if not provider.working:
+                continue
+            try:
+                if provider in [Copilot, CopilotAccount]:
+                    for model in provider.model_aliases.keys():
+                        if model not in cls.model_map:
+                            cls.model_map[model] = {}
+                        cls.model_map[model].update({provider.__name__: model})
+                elif provider == PollinationsAI:
+                    for model in provider.get_models():
+                        pmodel = f"{provider.__name__}:{model}"
+                        if pmodel not in cls.model_map:
+                            cls.model_map[pmodel] = {}
+                        cls.model_map[pmodel].update({provider.__name__: model})
+                    cls.audio_models.extend({f"{provider.__name__}:{model}": [] for model in provider.get_models() if model in provider.audio_models})
+                    cls.image_models.extend([f"{provider.__name__}:{model}" for model in provider.get_models() if model in provider.image_models])
+                    cls.vision_models.extend([f"{provider.__name__}:{model}" for model in provider.get_models() if model in provider.vision_models])
+                    for model in provider.model_aliases.keys():
+                        if model not in cls.model_map:
+                            cls.model_map[model] = {}
+                        cls.model_map[model].update({provider.__name__: model})
+                else:
+                    for model in provider.get_models():
+                        cleaned = clean_name(model)
+                        if cleaned not in cls.model_map:
+                            cls.model_map[cleaned] = {}
+                        cls.model_map[cleaned].update({provider.__name__: model})
+            except Exception as e:
+                debug.error(f"Error getting models for provider {provider.__name__}:", e)
+                continue
+
+            # Update special model lists
+            if hasattr(provider, 'image_models'):
+                cls.image_models.extend(provider.image_models)
+            if hasattr(provider, 'vision_models'):
+                cls.vision_models.extend(provider.vision_models)
+            if hasattr(provider, 'video_models'):
+                cls.video_models.extend(provider.video_models)
+
+        for provider in PROVIDERS_LIST_3:
+            if not provider.working:
+                continue
+            try:
+                new_models = provider.get_models()
+            except Exception as e:
+                debug.error(f"Error getting models for provider {provider.__name__}:", e)
+                continue
+            if provider == HuggingFaceMedia:
+                new_models = provider.video_models
+            model_map = {}
+            for model in new_models:
+                clean_value = model if model.startswith("openrouter:") else clean_name(model)
+                if clean_value not in model_map:
+                    model_map[clean_value] = model
+            if provider.model_aliases:
+                model_map.update(provider.model_aliases)
+            for alias, model in model_map.items():
+                if alias not in cls.model_map:
+                    cls.model_map[alias] = {}
+                cls.model_map[alias].update({provider.__name__: model})
+
+            # Update special model lists with both original and cleaned names
+            if hasattr(provider, 'image_models'):
+                cls.image_models.extend(provider.image_models)
+                cls.image_models.extend([clean_name(model) for model in provider.image_models])
+            if hasattr(provider, 'vision_models'):
+                cls.vision_models.extend(provider.vision_models)
+                cls.vision_models.extend([clean_name(model) for model in provider.vision_models])
+            if hasattr(provider, 'video_models'):
+                cls.video_models.extend(provider.video_models)
+                cls.video_models.extend([clean_name(model) for model in provider.video_models])
+
+        for provider in Provider.__providers__:
+            if provider.working and hasattr(provider, "get_models") and provider not in [AnyProvider, Custom, PollinationsImage, OpenaiAccount]:
+                for model in provider.get_models():
+                    clean = clean_name(model)
+                    if clean in cls.model_map:
+                        cls.model_map[clean].update({provider.__name__: model})
+                for alias, model in provider.model_aliases.items():
+                    if alias in cls.model_map:
+                        cls.model_map[alias].update({provider.__name__: model})
+                if provider == GeminiPro:
+                    for model in cls.model_map.keys():
+                        if "gemini" in model or "gemma" in model:
+                            cls.model_map[alias].update({provider.__name__: model})
+
+        # Process audio providers
+        for provider in [Microsoft_Phi_4_Multimodal, PollinationsAI]:
+            if provider.working:
+                cls.audio_models.extend([model for model in provider.audio_models if model not in cls.audio_models])
+
+        # Update model counts
+        for model, providers in cls.model_map.items():
+            if len(providers) > 1:
+                cls.models_count[model] = len(providers)
+
+        cls.video_models.append("video")
+        cls.model_map["video"] = {"Video": "video"}
+        del cls.model_map[""]
+        cls.audio_models = [*cls.audio_models]
+
+        # Create a mapping of parent providers to their children
+        cls.parents = {}
+        for provider in Provider.__providers__:
+            if provider.working and provider.__name__ != provider.get_parent():
+                if provider.get_parent() not in cls.parents:
+                    cls.parents[provider.get_parent()] = [provider.__name__]
+                elif provider.__name__ not in cls.parents[provider.get_parent()]:
+                    cls.parents[provider.get_parent()].append(provider.__name__)
+
+        for model, providers in cls.model_map.items():
+            for provider, alias in providers.items():
+                if alias != model and isinstance(alias, str) and alias not in cls.model_map:
+                    cls.model_aliases[alias] = model
 
     @classmethod
     def get_grouped_models(cls, ignored: list[str] = []) -> dict[str, list[str]]:
         unsorted_models = cls.get_models(ignored=ignored)
         groups = {key: [] for key in LABELS.keys()}
+
+        # Always add default first
+        groups["default"].append("default")
+
         for model in unsorted_models:
+            if model == "default":
+                continue  # Already added
+
             added = False
-            for group in groups:
-                if group == "mistral":
-                    if model.split("-")[0] in ("mistral", "mixtral", "mistralai", "pixtral", "ministral", "codestral"):
-                        groups[group].append(model)
-                        added = True
-                        break
-                elif group == "qwen":
-                    if model.startswith("qwen") or model.startswith("qwq") or model.startswith("qvq"):
-                        groups[group].append(model)
-                        added = True
-                        break
-                elif group == "perplexity":
-                    if model.startswith("sonar") or model == "r1-1776":
-                        groups[group].append(model)
-                        added = True
-                        break
-                elif group == "google":
-                    if model.startswith("gemini-") or model.startswith("gemma-"):
-                        groups[group].append(model)
-                        added = True
-                        break
-                elif group == "openai":
-                    if model.startswith(
-                        "gpt-") or model.startswith(
-                        "chatgpt-") or model.startswith(
-                        "o1") or model.startswith(
-                        "o3") or model.startswith(
-                        "o4-") or model in ("auto", "dall-e-3", "searchgpt"):
-                        groups[group].append(model)
-                        added = True
-                        break
-                elif model.startswith(group):
-                    groups[group].append(model)
-                    added = True
-                    break
-                elif group == "video":
-                    if model in cls.video_models:
-                        groups[group].append(model)
-                        added = True
-                        break
-                elif group == "image":
-                    if model in cls.image_models:
-                        groups[group].append(model)
-                        added = True
-                        break
-            if not added:
-                if model.startswith("janus"):
-                    groups["deepseek"].append(model)
-                elif model == "meta-ai":
-                    groups["llama"].append(model)
+            # Check for models with prefix
+            start = model.split(":")[0]
+            if start in ("PollinationsAI", "openrouter"):
+                submodel = model.split(":", maxsplit=1)[1]
+                if submodel in PollinationsAI.audio_models[PollinationsAI.default_audio_model]:
+                    groups["voices"].append(submodel)
                 else:
-                    groups["other"].append(model)
+                    groups[start].append(model)
+                added = True
+            # Check for Mistral company models specifically
+            elif model.startswith("mistral") and not any(x in model for x in ["dolphin", "nous", "openhermes"]):
+                groups["mistral"].append(model)
+                added = True
+            elif model.startswith(("pixtral-", "ministral-", "codestral")) or "mistral" in model or "mixtral" in model:
+                groups["mistral"].append(model)
+                added = True
+            # Check for Qwen models
+            elif model.startswith(("qwen", "Qwen", "qwq", "qvq")):
+                groups["qwen"].append(model)
+                added = True
+            # Check for Microsoft Phi models
+            elif model.startswith(("phi-", "microsoft/")) or "wizardlm" in model.lower():
+                groups["phi"].append(model)
+                added = True
+            # Check for Meta LLaMA models
+            elif model.startswith(("llama-", "meta-llama/", "llama2-", "llama3")):
+                groups["llama"].append(model)
+                added = True
+            elif model == "meta-ai" or model.startswith("codellama-"):
+                groups["llama"].append(model)
+                added = True
+            # Check for Google models
+            elif model.startswith(("gemini-", "gemma-", "google/", "bard-")):
+                groups["google"].append(model)
+                added = True
+            # Check for Cohere Command models
+            elif model.startswith(("command-", "CohereForAI/", "c4ai-command")):
+                groups["command"].append(model)
+                added = True
+            # Check for DeepSeek models
+            elif model.startswith(("deepseek-", "janus-")):
+                groups["deepseek"].append(model)
+                added = True
+            # Check for Perplexity models
+            elif model.startswith(("sonar", "sonar-", "pplx-")) or model == "r1-1776":
+                groups["perplexity"].append(model)
+                added = True
+            # Check for image models - UPDATED to include flux check
+            elif model in cls.image_models:
+                groups["image"].append(model)
+                added = True
+            # Check for OpenAI models
+            elif model.startswith(("gpt-", "chatgpt-", "o1", "o1", "o3", "o4")) or model in ("auto", "searchgpt"):
+                groups["openai"].append(model)
+                added = True
+            # Check for video models
+            elif model in cls.video_models:
+                groups["video"].append(model)
+                added = True
+            if not added:
+                for group in LABELS.keys():
+                    if model == group or group in model:
+                        groups[group].append(model)
+                        added = True
+                        break
+            # If not categorized, check for special cases then put in other
+            if not added:
+                groups["other"].append(model)
         return [
             {"group": LABELS[group], "models": names} for group, names in groups.items()
         ]
 
-    @classmethod
-    def get_models(cls, ignored: list[str] = []) -> list[str]:
-        ignored_key = " ".join(ignored)
-        if not cls.models_storage.get(ignored_key):
-            cls.audio_models = {}
-            cls.image_models = []
-            cls.vision_models = []
-            cls.video_models = []
-            model_with_providers = { 
-                model: [
-                    provider for provider in providers
-                    if provider.working and provider.get_parent() not in ignored
-                ] for model, (_, providers) in models.__models__.items()
-            }
-            model_with_providers = { 
-                model: providers for model, providers in model_with_providers.items()
-                if providers
-            }
-            cls.models_count = {
-                model: len(providers) for model, providers in model_with_providers.items() if len(providers) > 1
-            }
-            all_models = [cls.default_model] + list(model_with_providers.keys())
-            for provider in [OpenaiChat, CopilotAccount, PollinationsAI, HuggingSpace, Cloudflare, PerplexityLabs, Gemini, Grok, DDG]:
-                provider: ProviderType = provider
-                if not provider.working or provider.get_parent() in ignored:
-                    continue
-                if provider == CopilotAccount:
-                    all_models.extend(list(provider.model_aliases.keys()))
-                elif provider == PollinationsAI:
-                    all_models.extend([f"{provider.__name__}:{model}" for model in provider.get_models() if model not in all_models])
-                    cls.audio_models.update({f"{provider.__name__}:{model}": [] for model in provider.get_models() if model in provider.audio_models})
-                    cls.image_models.extend([f"{provider.__name__}:{model}" for model in provider.get_models() if model in provider.image_models])
-                    cls.vision_models.extend([f"{provider.__name__}:{model}" for model in provider.get_models() if model in provider.vision_models])
-                    all_models.extend(list(provider.model_aliases.keys()))
-                else:
-                    all_models.extend(provider.get_models())
-                cls.image_models.extend(provider.image_models)
-                cls.vision_models.extend(provider.vision_models)
-                cls.video_models.extend(provider.video_models)
-            def clean_name(name: str) -> str:
-                return name.split("/")[-1].split(":")[0].lower(
-                    ).replace("-instruct", ""
-                    ).replace("-chat", ""
-                    ).replace("-08-2024", ""
-                    ).replace("-03-2025", ""
-                    ).replace("-20241022", ""
-                    ).replace("-20240904", ""
-                    ).replace("-2025-04-16", ""
-                    ).replace("-2025-04-14", ""
-                    ).replace("-0125", ""
-                    ).replace("-2407", ""
-                    ).replace("-2501", ""
-                    ).replace("-0324", ""
-                    ).replace("-2409", ""
-                    ).replace("-2410", ""
-                    ).replace("-2411", ""
-                    ).replace("-1119", ""
-                    ).replace("-0919", ""
-                    ).replace("-02-24", ""
-                    ).replace("-03-25", ""
-                    ).replace("-03-26", ""
-                    ).replace("-01-21", ""
-                    ).replace("-002", ""
-                    ).replace("_", "."
-                    ).replace("c4ai-", ""
-                    ).replace("-preview", ""
-                    ).replace("-experimental", ""
-                    ).replace("-v1", ""
-                    ).replace("-fp8", ""
-                    ).replace("-bf16", ""
-                    ).replace("-hf", ""
-                    ).replace("flux.1-", "flux-"
-                    ).replace("llama3", "llama-3"
-                    ).replace("meta-llama-", "llama-")
-            for provider in [HarProvider, LambdaChat, DeepInfraChat, HuggingFace, HuggingFaceMedia]:
-                if not provider.working or provider.get_parent() in ignored:
-                    continue
-                new_models = provider.get_models()
-                if provider == HuggingFaceMedia:
-                    new_models = provider.video_models
-                model_map = {clean_name(model): model for model in new_models}
-                if not provider.model_aliases:
-                    provider.model_aliases = {}
-                provider.model_aliases.update(model_map)
-                all_models.extend(list(model_map.keys()))
-                cls.image_models.extend([clean_name(model) for model in provider.image_models])
-                cls.vision_models.extend([clean_name(model) for model in provider.vision_models])
-                cls.video_models.extend([clean_name(model) for model in provider.video_models])
-            for provider in [Microsoft_Phi_4_Multimodal, PollinationsAI]:
-                if provider.working and provider.get_parent() not in ignored:
-                    cls.audio_models.update(provider.audio_models)
-            cls.models_count.update({model: all_models.count(model) for model in all_models if all_models.count(model) > cls.models_count.get(model, 0)})
-            cls.models_storage[ignored_key] = list(dict.fromkeys([model if model else cls.default_model for model in all_models]))
-        return cls.models_storage[ignored_key]
+class AnyProvider(AsyncGeneratorProvider, AnyModelProviderMixin):
+    working = True
+    active_by_default = True
 
     @classmethod
     async def create_async_generator(
@@ -203,15 +334,11 @@ class AnyProvider(AsyncGeneratorProvider, ProviderModelMixin):
         stream: bool = True,
         media: MediaListType = None,
         ignored: list[str] = [],
+        api_key: Union[str, dict[str, str]] = None,
         **kwargs
     ) -> AsyncResult:
-        cls.get_models(ignored=ignored)
         providers = []
-        if model and ":" in model:
-            providers = model.split(":")
-            model = providers.pop()
-            providers = [getattr(Provider, provider) for provider in providers]
-        elif not model or model == cls.default_model:
+        if not model or model == cls.default_model:
             model = ""
             has_image = False
             has_audio = False
@@ -224,7 +351,10 @@ class AnyProvider(AsyncGeneratorProvider, ProviderModelMixin):
             if "tools" in kwargs:
                 providers = [PollinationsAI]
             elif "audio" in kwargs or "audio" in kwargs.get("modalities", []):
-                providers = [PollinationsAI, EdgeTTS, gTTS]
+                if kwargs.get("audio", {}).get("language") is None:
+                    providers = [PollinationsAI, OpenAIFM, Gemini]
+                else:
+                    providers = [PollinationsAI, OpenAIFM, EdgeTTS, gTTS]
             elif has_audio:
                 providers = [PollinationsAI, Microsoft_Phi_4_Multimodal, MarkItDown]
             elif has_image:
@@ -236,29 +366,73 @@ class AnyProvider(AsyncGeneratorProvider, ProviderModelMixin):
             if provider.working and provider.get_parent() not in ignored:
                 model = None
                 providers.append(provider)
-        else:
-            for provider in [
-                OpenaiChat, Cloudflare, HarProvider, PerplexityLabs, Gemini, Grok, DeepSeekAPI, FreeRouter, Blackbox,
-                HuggingSpace, LambdaChat, CopilotAccount, PollinationsAI, DeepInfraChat, DDG, HuggingFace, HuggingFaceMedia,
-            ]:
-                if provider.working:
-                    if not model or model in provider.get_models() or model in provider.model_aliases:
-                       providers.append(provider)
-            if model in models.__models__:
-                for provider in models.__models__[model][1]:
+        elif model and ":" in model:
+            provider, submodel = model.split(":", maxsplit=1)
+            if hasattr(Provider, provider):
+                provider = getattr(Provider, provider)
+                if provider.working and provider.get_parent() not in ignored:
                     providers.append(provider)
+                    model = submodel
+        else:
+            if model not in cls.model_map:
+                if model in cls.model_aliases:
+                    model = cls.model_aliases[model]
+            if model in cls.model_map:
+                for provider, alias in cls.model_map[model].items():
+                    provider = Provider.__map__[provider]
+                    if model not in provider.model_aliases:
+                        provider.model_aliases[model] = alias
+                    providers.append(provider)
+        if not providers:
+            for provider in PROVIDERS_LIST_2 + PROVIDERS_LIST_3:
+                try:
+                    if model in provider.get_models():
+                        providers.append(provider)
+                    elif model in provider.model_aliases:
+                        providers.append(provider)
+                except Exception as e:
+                    debug.error(f"Error checking provider {provider.__name__} for model {model}:", e)
         providers = [provider for provider in providers if provider.working and provider.get_parent() not in ignored]
         providers = list({provider.__name__: provider for provider in providers}.values())
+
         if len(providers) == 0:
-            raise ModelNotFoundError(f"Model {model} not found in any provider.")
-        async for chunk in IterListProvider(providers).create_async_generator(
+            raise ModelNotFoundError(f"AnyProvider: Model {model} not found in any provider.")
+
+        debug.log(f"AnyProvider: Using providers: {[provider.__name__ for provider in providers]} for model '{model}'")
+
+        async for chunk in RotatedProvider(providers).create_async_generator(
             model,
             messages,
             stream=stream,
             media=media,
+            api_key=api_key,
             **kwargs
         ):
             yield chunk
+
+# Clean model names function
+def clean_name(name: str) -> str:
+    name = name.split("/")[-1].split(":")[0].lower()
+    # Date patterns
+    name = re.sub(r'-\d{4}-\d{2}-\d{2}', '', name)
+    # name = re.sub(r'-\d{3,8}', '', name)
+    name = re.sub(r'-\d{2}-\d{2}', '', name)
+    name = re.sub(r'-[0-9a-f]{8}$', '', name)
+    # Version patterns
+    name = re.sub(r'-(instruct|preview|experimental|v\d+|fp8|bf16|hf|free|tput)$', '', name)
+    # Other replacements
+    name = name.replace("_", ".")
+    name = name.replace("c4ai-", "")
+    name = name.replace("meta-llama-", "llama-")
+    name = name.replace("llama-", "llama").replace("llama", "llama-")
+    name = name.replace("qwen-", "qwen").replace("qwen", "qwen-")
+    name = name.replace("stable-diffusion-3.5-large", "sd-3.5-large")
+    name = name.replace("flux.1-", "flux-")
+    name = name.replace("-001", "")
+    name = name.replace("-002", "")
+    name = name.replace("-instruct", "")
+    name = name.replace("-latest", "")
+    return name
 
 setattr(Provider, "AnyProvider", AnyProvider)
 Provider.__map__["AnyProvider"] = AnyProvider

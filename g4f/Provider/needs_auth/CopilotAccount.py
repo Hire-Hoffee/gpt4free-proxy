@@ -3,19 +3,23 @@ from __future__ import annotations
 import os
 from typing import AsyncIterator
 
-from ..base_provider import AsyncAuthedProvider
 from ..Copilot import Copilot, readHAR, has_nodriver, get_access_token_and_cookies
 from ...providers.response import AuthResult, RequestLogin
-from ...typing import AsyncResult, Messages
 from ...errors import NoValidHarFileError
 from ... import debug
 
-class CopilotAccount(Copilot, AsyncAuthedProvider):
+class CopilotAccount(Copilot):
     needs_auth = True
     use_nodriver = True
     parent = "Copilot"
     default_model = "Copilot"
     default_vision_model = default_model
+    model_aliases = {
+        "gpt-4": default_model,
+        "gpt-4o": default_model,
+        "o1": "Think Deeper",
+        "dall-e-3": default_model
+    }
 
     @classmethod
     async def on_auth_async(cls, proxy: str = None, **kwargs) -> AsyncIterator:
@@ -32,21 +36,3 @@ class CopilotAccount(Copilot, AsyncAuthedProvider):
             api_key=cls._access_token,
             cookies=cls.cookies_to_dict()
         )
-
-    @classmethod
-    async def create_authed(
-        cls,
-        model: str,
-        messages: Messages,
-        auth_result: AuthResult,
-        **kwargs
-    ) -> AsyncResult:
-        cls._access_token = getattr(auth_result, "api_key")
-        cls._cookies = getattr(auth_result, "cookies")
-        async for chunk in cls.create_async_generator(model, messages, **kwargs):
-            yield chunk
-        auth_result.cookies = cls.cookies_to_dict()
-
-    @classmethod
-    def cookies_to_dict(cls):
-        return cls._cookies if isinstance(cls._cookies, dict) else {c.name: c.value for c in cls._cookies}

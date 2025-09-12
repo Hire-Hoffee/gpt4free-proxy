@@ -20,17 +20,17 @@ except ImportError:
 
 from ... import debug
 from ...typing import Messages, Cookies, MediaListType, AsyncResult, AsyncIterator
-from ...providers.response import JsonConversation, Reasoning, RequestLogin, ImageResponse, YouTube, AudioResponse
+from ...providers.response import JsonConversation, Reasoning, RequestLogin, ImageResponse, YouTubeResponse, AudioResponse, TitleGeneration
 from ...requests.raise_for_status import raise_for_status
 from ...requests.aiohttp import get_connector
 from ...requests import get_nodriver
 from ...image.copy_images import get_filename, get_media_dir, ensure_media_dir
-from ...errors import MissingAuthError
+from ...errors import MissingAuthError, ModelNotFoundError
 from ...image import to_bytes
 from ...cookies import get_cookies_dir
 from ...tools.media import merge_media
 from ..base_provider import AsyncGeneratorProvider, ProviderModelMixin
-from ..helper import format_prompt, get_cookies, get_last_user_message, format_image_prompt
+from ..helper import format_prompt, get_cookies, get_last_user_message, format_media_prompt
 from ... import debug
 
 REQUEST_HEADERS = {
@@ -59,7 +59,7 @@ UPLOAD_IMAGE_HEADERS = {
 }
 GOOGLE_COOKIE_DOMAIN = ".google.com"
 ROTATE_COOKIES_URL = "https://accounts.google.com/RotateCookies"
-GGOGLE_SID_COOKIE = "__Secure-1PSID"
+GOOGLE_SID_COOKIE = "__Secure-1PSID"
 
 models = {
     "gemini-2.5-pro-exp": {"x-goog-ext-525001261-jspb": '[1,null,null,null,"2525e3954d185b3c"]'},
@@ -70,6 +70,9 @@ models = {
     "gemini-2.0-flash-exp": {"x-goog-ext-525001261-jspb": '[null,null,null,null,"f299729663a2343f"]'},
     "gemini-2.0-flash-thinking": {"x-goog-ext-525001261-jspb": '[null,null,null,null,"9c17b1863f581b8a"]'},
     "gemini-2.0-flash-thinking-with-apps": {"x-goog-ext-525001261-jspb": '[null,null,null,null,"f8f8f5ea629f5d37"]'},
+    # Currently used models
+    "gemini-2.5-pro": {"x-goog-ext-525001261-jspb": '[1,null,null,null,"61530e79959ab139",null,null,null,[4]]'},
+    "gemini-2.5-flash": {"x-goog-ext-525001261-jspb": '[1,null,null,null,"9ec249fc9ad08861",null,null,null,[4]]'},
     "gemini-audio": {}
 }
 
@@ -86,12 +89,8 @@ class Gemini(AsyncGeneratorProvider, ProviderModelMixin):
     default_vision_model = default_model
     image_models = [default_image_model]
     models = [
-        default_model, *models.keys()
+        default_model, "gemini-2.5-flash", "gemini-2.5-pro"
     ]
-    model_aliases = {
-        "gemini-2.0": "",
-        "gemini-2.5-pro": "gemini-2.5-pro-exp"
-    }
 
     synthesize_content_type = "audio/vnd.wav"
     
@@ -128,11 +127,12 @@ class Gemini(AsyncGeneratorProvider, ProviderModelMixin):
         """
 
         while True:
+            new_1psidts = None
             try:
                 new_1psidts = await rotate_1psidts(cls.url, cls._cookies, proxy)
             except Exception as e:
                 debug.error(f"Failed to refresh cookies: {e}")
-                task = cls.rotate_tasks.get(cls._cookies[GGOGLE_SID_COOKIE])
+                task = cls.rotate_tasks.get(cls._cookies[GOOGLE_SID_COOKIE])
                 if task:
                     task.cancel()
                 debug.error(
@@ -163,7 +163,7 @@ class Gemini(AsyncGeneratorProvider, ProviderModelMixin):
         if model in cls.model_aliases:
             model = cls.model_aliases[model]
         if audio is not None or model == "gemini-audio":
-            prompt = format_image_prompt(messages, prompt)
+            prompt = format_media_prompt(messages, prompt)
             filename = get_filename(["gemini"], prompt, ".ogx", prompt)
             ensure_media_dir()
             path = os.path.join(get_media_dir(), filename)
@@ -196,10 +196,10 @@ class Gemini(AsyncGeneratorProvider, ProviderModelMixin):
                 await cls.fetch_snlm0e(session, cls._cookies)
             if not cls._snlm0e:
                 raise RuntimeError("Invalid cookies. SNlM0e not found")
-            if GGOGLE_SID_COOKIE in cls._cookies:
-                task = cls.rotate_tasks.get(cls._cookies[GGOGLE_SID_COOKIE])
+            if GOOGLE_SID_COOKIE in cls._cookies:
+                task = cls.rotate_tasks.get(cls._cookies[GOOGLE_SID_COOKIE])
                 if not task:
-                    cls.rotate_tasks[cls._cookies[GGOGLE_SID_COOKIE]] = asyncio.create_task(
+                    cls.rotate_tasks[cls._cookies[GOOGLE_SID_COOKIE]] = asyncio.create_task(
                         cls.start_auto_refresh()
                     )
 
@@ -235,7 +235,7 @@ class Gemini(AsyncGeneratorProvider, ProviderModelMixin):
                     image_prompt = response_part = None
                     last_content = ""
                     youtube_ids = []
-                    async for line in response.content:
+                    for line in (await response.text()).split("\n"):
                         try:
                             try:
                                 line = json.loads(line)
@@ -246,6 +246,8 @@ class Gemini(AsyncGeneratorProvider, ProviderModelMixin):
                             if len(line[0]) < 3 or not line[0][2]:
                                 continue
                             response_part = json.loads(line[0][2])
+                            if response_part[10]:
+                                yield TitleGeneration(response_part[10][0].strip())
                             if not response_part[4]:
                                 continue
                             if return_conversation:
@@ -309,7 +311,7 @@ class Gemini(AsyncGeneratorProvider, ProviderModelMixin):
                                 pass
                         youtube_ids = youtube_ids if youtube_ids else find_youtube_ids(content)
                         if youtube_ids:
-                            yield YouTube(youtube_ids)
+                            yield YouTubeResponse(youtube_ids)
 
     @classmethod
     async def synthesize(cls, params: dict, proxy: str = None) -> AsyncIterator[bytes]:

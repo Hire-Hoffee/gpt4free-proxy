@@ -30,6 +30,8 @@ def get_pr_details(github: Github) -> PullRequest:
     Returns:
         PullRequest: An object representing the pull request.
     """
+    if not os.path.isfile('./pr_number'):
+        return
     with open('./pr_number', 'r') as file:
         pr_number = file.read().strip()
     if not pr_number:
@@ -67,6 +69,8 @@ def read_json(text: str) -> dict:
     match = re.search(r"```(json|)\n(?P<code>[\S\s]+?)\n```", text)
     if match:
         text = match.group("code")
+    else:
+        text = text.split("\n---\n")[0]
     try:
         return json.loads(text.strip())
     except json.JSONDecodeError:

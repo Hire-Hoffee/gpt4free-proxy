@@ -42,10 +42,8 @@ from .. import debug
 from .raise_for_status import raise_for_status
 from ..errors import MissingRequirementsError
 from ..typing import Cookies
-from ..cookies import get_cookies_dir
+from ..cookies import BrowserConfig, get_cookies_dir
 from .defaults import DEFAULT_HEADERS, WEBVIEW_HAEDERS
-
-BROWSER_EXECUTABLE_PATH = None
 
 if not has_curl_cffi:
     class Session:
@@ -90,20 +88,20 @@ async def get_args_from_nodriver(
     wait_for: str = None,
     callback: callable = None,
     cookies: Cookies = None,
-    browser: Browser = None
+    browser: Browser = None,
+    user_data_dir: str = "nodriver"
 ) -> dict:
     if browser is None:
-        browser, stop_browser = await get_nodriver(proxy=proxy, timeout=timeout)
+        browser, stop_browser = await get_nodriver(proxy=proxy, timeout=timeout, user_data_dir=user_data_dir)
     else:
         def stop_browser():
-            ...
+            pass
     try:
-        if debug.logging:
-            print(f"Open nodriver with url: {url}")
-        domain = urlparse(url).netloc
+        debug.log(f"Open nodriver with url: {url}")
         if cookies is None:
             cookies = {}
         else:
+            domain = urlparse(url).netloc
             await browser.cookies.set_all(get_cookie_params_from_dict(cookies, url=url, domain=domain))
         page = await browser.get(url)
         user_agent = await page.evaluate("window.navigator.userAgent", return_by_value=True)
@@ -116,18 +114,20 @@ async def get_args_from_nodriver(
         for c in await page.send(nodriver.cdp.network.get_cookies([url])):
             cookies[c.name] = c.value
         await page.close()
+        stop_browser()
         return {
             "impersonate": "chrome",
             "cookies": cookies,
             "headers": {
                 **DEFAULT_HEADERS,
                 "user-agent": user_agent,
-                "referer": url,
+                "referer": f"{url.rstrip('/')}/",
             },
             "proxy": proxy,
         }
-    finally:
+    except:
         stop_browser()
+        raise
 
 def merge_cookies(cookies: Iterator[Morsel], response: Response) -> Cookies:
     if cookies is None:
@@ -141,20 +141,20 @@ def merge_cookies(cookies: Iterator[Morsel], response: Response) -> Cookies:
     return cookies
 
 def set_browser_executable_path(browser_executable_path: str):
-    BROWSER_EXECUTABLE_PATH = browser_executable_path
+    BrowserConfig.browser_executable_path = browser_executable_path
 
 async def get_nodriver(
     proxy: str = None,
     user_data_dir = "nodriver",
-    timeout: int = 120,
+    timeout: int = 300,
     browser_executable_path: str = None,
     **kwargs
 ) -> tuple[Browser, callable]:
     if not has_nodriver:
         raise MissingRequirementsError('Install "nodriver" and "platformdirs" package | pip install -U nodriver platformdirs')
-    user_data_dir = user_config_dir(f"g4f-{user_data_dir}") if has_platformdirs else None
+    user_data_dir = user_config_dir(f"g4f-{user_data_dir}") if user_data_dir and has_platformdirs else None
     if browser_executable_path is None:
-        browser_executable_path = BROWSER_EXECUTABLE_PATH
+        browser_executable_path = BrowserConfig.browser_executable_path
     if browser_executable_path is None:
         try:
             browser_executable_path = find_chrome_executable()
@@ -163,47 +163,100 @@ async def get_nodriver(
             browser_executable_path = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe"
             if not os.path.exists(browser_executable_path):
                 browser_executable_path = None
+    debug.log(f"Browser executable path: {browser_executable_path}")
     lock_file = Path(get_cookies_dir()) / ".nodriver_is_open"
-    lock_file.parent.mkdir(exist_ok=True)
-    # Implement a short delay (milliseconds) to prevent race conditions.
-    await asyncio.sleep(0.1 * random.randint(0, 50))
-    if lock_file.exists():
-        opend_at = float(lock_file.read_text())
-        time_open = time.time() - opend_at
-        if timeout * 2 > time_open:
-            debug.log(f"Nodriver: Browser is already in use since {time_open} secs.")
-            for _ in range(timeout):
-                if lock_file.exists():
-                    await asyncio.sleep(1)
-                else:
-                    break
-    lock_file.write_text(str(time.time()))
-    debug.log(f"Open nodriver with user_dir: {user_data_dir}")
+    if user_data_dir:
+        lock_file.parent.mkdir(exist_ok=True)
+        # Implement a short delay (milliseconds) to prevent race conditions.
+        await asyncio.sleep(0.1 * random.randint(0, 50))
+        if lock_file.exists():
+            opend_at = float(lock_file.read_text())
+            time_open = time.time() - opend_at
+            if timeout * 2 > time_open:
+                debug.log(f"Nodriver: Browser is already in use since {time_open} secs.")
+                debug.log("Lock file:", lock_file)
+                for idx in range(timeout):
+                    if lock_file.exists():
+                        await asyncio.sleep(1)
+                    else:
+                        break
+                    if idx == timeout - 1:
+                        debug.log("Timeout reached, nodriver is still in use.")
+                        raise TimeoutError("Nodriver is already in use, please try again later.")
+            else:
+                debug.log(f"Nodriver: Browser was opened {time_open} secs ago, closing it.")
+                BrowserConfig.stop_browser()
+                lock_file.unlink(missing_ok=True)
+        lock_file.write_text(str(time.time()))
+        debug.log(f"Open nodriver with user_dir: {user_data_dir}")
     try:
+        browser_args = ["--no-sandbox"]
         browser = await nodriver.start(
             user_data_dir=user_data_dir,
-            browser_args=None if proxy is None else [f"--proxy-server={proxy}"],
+            browser_args=[*browser_args, f"--proxy-server={proxy}"] if proxy else browser_args,
             browser_executable_path=browser_executable_path,
+            port=BrowserConfig.port,
+            host=BrowserConfig.host,
             **kwargs
         )
     except FileNotFoundError as e:
         raise MissingRequirementsError(e)
-    except:
+    except Exception as e:
         if util.get_registered_instances():
+            debug.error(e)
             browser = util.get_registered_instances().pop()
         else:
             raise
     def on_stop():
         try:
-            if browser.connection:
+            if BrowserConfig.port is None and browser.connection:
                 browser.stop()
+        except:
+            pass
         finally:
-            lock_file.unlink(missing_ok=True)
+            if user_data_dir:
+                lock_file.unlink(missing_ok=True)
+    BrowserConfig.stop_browser = on_stop
     return browser, on_stop
 
-async def see_stream(iter_lines: Iterator[bytes]) -> AsyncIterator[dict]:
+async def sse_stream(iter_lines: Iterator[bytes]) -> AsyncIterator[dict]:
+    if hasattr(iter_lines, "content"):
+        iter_lines = iter_lines.content
+    elif hasattr(iter_lines, "iter_lines"):
+        iter_lines = iter_lines.iter_lines()
     async for line in iter_lines:
-        if line.startswith(b"data: "):
-            if line[6:].startswith(b"[DONE]"):
+        if line.startswith(b"data:"):
+            rest = line[5:].strip()
+            if not rest:
+                continue
+            if rest.startswith(b"[DONE]"):
                 break
-            yield json.loads(line[6:])
+            try:
+                yield json.loads(rest)
+            except json.JSONDecodeError:
+                raise ValueError(f"Invalid JSON data: {rest}")
+
+async def iter_lines(iter_response: AsyncIterator[bytes], delimiter=None):
+    """
+    iterate streaming content line by line, separated by ``\\n``.
+
+    Copied from: https://requests.readthedocs.io/en/latest/_modules/requests/models/
+    which is under the License: Apache 2.0
+    """
+    pending = None
+
+    async for chunk in iter_response:
+        if pending is not None:
+            chunk = pending + chunk
+        lines = chunk.split(delimiter) if delimiter else chunk.splitlines()
+        pending = (
+            lines.pop()
+            if lines and lines[-1] and chunk and lines[-1][-1] == chunk[-1]
+            else None
+        )
+
+        for line in lines:
+            yield line
+
+    if pending is not None:
+        yield pending
